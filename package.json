@@ -1,0 +1,15 @@
+{
+  "name": "teamflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A full-stack project management application",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=@teamflow/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
