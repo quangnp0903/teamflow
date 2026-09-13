@@ -5,13 +5,15 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "dev": "node --env-file=.env --watch src/server.ts",
     "start": "node --env-file=.env src/server.ts",
     "typecheck": "tsc",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:migrate:test": "prisma migrate deploy --config prisma.test.config.ts"
   },
   "keywords": [],
   "type": "module",
