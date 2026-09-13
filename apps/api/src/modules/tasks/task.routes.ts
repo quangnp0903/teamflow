@@ -7,6 +7,8 @@ export function createTaskRouter(controller: TaskController) {
 
   router.get('/', controller.list);
   router.post('/', controller.create);
+  router.get('/:taskId', controller.getById);
+  router.patch('/:taskId', controller.update);
 
   return router;
 }

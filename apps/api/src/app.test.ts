@@ -61,4 +61,135 @@ describe('task API', () => {
       },
     });
   });
+
+  it('partially updates a task and preserves omitted fields', async () => {
+    const app = createApp();
+
+    const createResponse = await request(app).post('/api/tasks').send({
+      title: 'Original title',
+      description: 'Original description',
+    });
+
+    const response = await request(app)
+      .patch(`/api/tasks/${createResponse.body.data.id}`)
+      .send({
+        description: null,
+        status: 'in_progress',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      id: createResponse.body.data.id,
+      title: 'Original title',
+      description: null,
+      status: 'in_progress',
+    });
+  });
+
+  it('rejects an empty task update', async () => {
+    const app = createApp();
+
+    const createResponse = await request(app).post('/api/tasks').send({
+      title: 'Unchanged task',
+    });
+
+    const response = await request(app)
+      .patch(`/api/tasks/${createResponse.body.data.id}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+      },
+    });
+  });
+
+  it('rejects an invalid task status', async () => {
+    const app = createApp();
+
+    const createResponse = await request(app).post('/api/tasks').send({
+      title: 'Status validation',
+    });
+
+    const response = await request(app)
+      .patch(`/api/tasks/${createResponse.body.data.id}`)
+      .send({
+        status: 'finished',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+      },
+    });
+  });
+
+  it('returns not found when updating a missing task', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .patch('/api/tasks/00000000-0000-4000-8000-000000000000')
+      .send({
+        title: 'Updated title',
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: {
+        code: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      },
+    });
+  });
+
+  it('returns a task by ID', async () => {
+    const app = createApp();
+
+    const createResponse = await request(app).post('/api/tasks').send({
+      title: 'Implement task lookup',
+    });
+
+    const response = await request(app).get(
+      `/api/tasks/${createResponse.body.data.id}`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual(createResponse.body.data);
+  });
+
+  it('returns a typed error when a task does not exist', async () => {
+    const app = createApp();
+
+    const response = await request(app).get(
+      '/api/tasks/00000000-0000-4000-8000-000000000000'
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: {
+        code: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      },
+    });
+  });
+
+  it('rejects a malformed task ID', async () => {
+    const app = createApp();
+
+    const response = await request(app).get('/api/tasks/not-a-uuid');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        details: [
+          {
+            path: 'taskId',
+          },
+        ],
+      },
+    });
+  });
 });
