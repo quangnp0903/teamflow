@@ -1,11 +1,16 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
+import { InMemoryTaskRepository } from './modules/tasks/in-memory-task.repository.ts';
 import { createApp } from './app.ts';
+
+function createTestApp() {
+  return createApp({ taskRepository: new InMemoryTaskRepository() });
+}
 
 describe('task API', () => {
   it('creates a task and returns it from the list endpoint', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const createResponse = await request(app).post('/api/tasks').send({
       title: 'Design task module',
@@ -28,7 +33,7 @@ describe('task API', () => {
   });
 
   it('rejects an invalid task payload', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const response = await request(app).post('/api/tasks').send({
       title: '',
@@ -49,7 +54,7 @@ describe('task API', () => {
   });
 
   it('returns a stable error for an unknown route', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const response = await request(app).get('/api/unknown');
 
@@ -63,7 +68,7 @@ describe('task API', () => {
   });
 
   it('partially updates a task and preserves omitted fields', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const createResponse = await request(app).post('/api/tasks').send({
       title: 'Original title',
@@ -87,7 +92,7 @@ describe('task API', () => {
   });
 
   it('rejects an empty task update', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const createResponse = await request(app).post('/api/tasks').send({
       title: 'Unchanged task',
@@ -106,7 +111,7 @@ describe('task API', () => {
   });
 
   it('rejects an invalid task status', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const createResponse = await request(app).post('/api/tasks').send({
       title: 'Status validation',
@@ -127,7 +132,7 @@ describe('task API', () => {
   });
 
   it('returns not found when updating a missing task', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const response = await request(app)
       .patch('/api/tasks/00000000-0000-4000-8000-000000000000')
@@ -145,7 +150,7 @@ describe('task API', () => {
   });
 
   it('returns a task by ID', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const createResponse = await request(app).post('/api/tasks').send({
       title: 'Implement task lookup',
@@ -160,7 +165,7 @@ describe('task API', () => {
   });
 
   it('returns a typed error when a task does not exist', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const response = await request(app).get(
       '/api/tasks/00000000-0000-4000-8000-000000000000'
@@ -176,7 +181,7 @@ describe('task API', () => {
   });
 
   it('rejects a malformed task ID', async () => {
-    const app = createApp();
+    const app = createTestApp();
 
     const response = await request(app).get('/api/tasks/not-a-uuid');
 

@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 *.env
 *.env.*
+*.ignored.txt
 
 !.env.example
 apps/api/src/generated/prisma/
