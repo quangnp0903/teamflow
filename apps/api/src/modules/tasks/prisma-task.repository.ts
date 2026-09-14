@@ -8,6 +8,8 @@ import type { Task } from './task.model.ts';
 
 import type {
   CreateTaskRecord,
+  ListTasksQuery,
+  TaskPage,
   TaskRepository,
   UpdateTaskRecord,
 } from './task.repository.ts';
@@ -32,14 +34,43 @@ export class PrismaTaskRepository implements TaskRepository {
     this.client = client;
   }
 
-  async list(): Promise<readonly Task[]> {
-    const tasks = await this.client.task.findMany({
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
+  async list(query: ListTasksQuery): Promise<TaskPage> {
+    const where: Prisma.TaskWhereInput = {};
 
-    return tasks.map(toDomainTask);
+    if (query.status !== undefined) {
+      where.status = query.status;
+    }
+
+    if (query.search !== undefined) {
+      where.OR = [
+        {
+          title: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          description: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    const offset = (query.page - 1) * query.pageSize;
+
+    const [tasks, total] = await this.client.$transaction([
+      this.client.task.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: offset,
+        take: query.pageSize,
+      }),
+      this.client.task.count({ where }),
+    ]);
+
+    return { items: tasks.map(toDomainTask), total };
   }
 
   async findById(id: string): Promise<Task | null> {

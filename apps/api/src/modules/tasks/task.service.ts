@@ -1,5 +1,10 @@
 import type { CreateTaskInput, UpdateTaskInput } from './task.schema.ts';
-import type { TaskRepository, UpdateTaskRecord } from './task.repository.ts';
+import type {
+  TaskRepository,
+  UpdateTaskRecord,
+  ListTasksQuery,
+  TaskPage,
+} from './task.repository.ts';
 import { AppError } from '../../lib/errors/app-error.ts';
 import type { Task } from './task.model.ts';
 
@@ -10,8 +15,8 @@ export class TaskService {
     this.repository = repository;
   }
 
-  async listTasks() {
-    return this.repository.list();
+  async listTasks(query: ListTasksQuery): Promise<TaskPage> {
+    return this.repository.list(query);
   }
 
   async createTask(input: CreateTaskInput) {

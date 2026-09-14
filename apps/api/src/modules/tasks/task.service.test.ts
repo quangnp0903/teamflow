@@ -32,9 +32,9 @@ describe('TaskService', () => {
       description: 'Compare service and HTTP tests',
     });
 
-    const tasks = await service.listTasks();
+    const tasks = await service.listTasks({ page: 1, pageSize: 20 });
 
-    expect(tasks).toEqual([createdTask]);
+    expect(tasks).toEqual({ items: [createdTask], total: 1 });
   });
 
   it('throws a typed error when a task does not exist', async () => {

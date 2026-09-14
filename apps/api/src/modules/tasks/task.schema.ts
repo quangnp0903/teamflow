@@ -29,3 +29,12 @@ export const updateTaskSchema = z
   );
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+
+export const listTasksQuerySchema = z
+  .object({
+    status: z.enum(TASK_STATUSES).optional(),
+    search: z.string().trim().min(1).max(120).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();

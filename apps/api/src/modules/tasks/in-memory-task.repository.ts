@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { Task } from './task.model.ts';
 import type {
   CreateTaskRecord,
+  ListTasksQuery,
+  TaskPage,
   TaskRepository,
   UpdateTaskRecord,
 } from './task.repository.ts';
@@ -10,8 +12,47 @@ import type {
 export class InMemoryTaskRepository implements TaskRepository {
   private readonly tasks: Task[] = [];
 
-  async list(): Promise<readonly Task[]> {
-    return [...this.tasks];
+  async list(query: ListTasksQuery): Promise<TaskPage> {
+    let matchingTasks = [...this.tasks];
+
+    if (query.status !== undefined) {
+      matchingTasks = matchingTasks.filter(
+        (task) => task.status === query.status
+      );
+    }
+
+    if (query.search !== undefined) {
+      const normalizedSearch = query.search.toLowerCase();
+
+      matchingTasks = matchingTasks.filter((task) => {
+        const titleMatches = task.title
+          .toLowerCase()
+          .includes(normalizedSearch);
+
+        const descriptionMatches =
+          task.description?.toLowerCase().includes(normalizedSearch) ?? false;
+
+        return titleMatches || descriptionMatches;
+      });
+    }
+
+    matchingTasks.sort((firstTask, secondTask) => {
+      const dateComparison = secondTask.createdAt.localeCompare(
+        firstTask.createdAt
+      );
+
+      if (dateComparison !== 0) {
+        return dateComparison;
+      }
+
+      return secondTask.id.localeCompare(firstTask.id);
+    });
+
+    const total = matchingTasks.length;
+    const offset = (query.page - 1) * query.pageSize;
+    const items = matchingTasks.slice(offset, offset + query.pageSize);
+
+    return { items, total };
   }
 
   async create(input: CreateTaskRecord): Promise<Task> {

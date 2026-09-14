@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config } from 'dotenv';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 
 import { PrismaClient } from '../../generated/prisma/client.ts';
 import { PrismaTaskRepository } from './prisma-task.repository.ts';
@@ -79,7 +80,10 @@ describe('PrismaTaskRepository', () => {
       createdTask
     );
 
-    await expect(repository.list()).resolves.toContainEqual(createdTask);
+    const page = await repository.list({ page: 1, pageSize: 20 });
+
+    expect(page.items).toContainEqual(createdTask);
+    expect(page.total).toBeGreaterThanOrEqual(1);
   });
 
   it('updates a persisted task', async () => {
@@ -115,5 +119,57 @@ describe('PrismaTaskRepository', () => {
         status: 'done',
       })
     ).resolves.toBeNull();
+  });
+
+  it('filters and paginates persisted tasks', async () => {
+    const searchToken = `Db${randomUUID().replaceAll('-', '')}`;
+
+    const titleMatch = await repository.create({
+      title: `${searchToken.toUpperCase()} title match`,
+      description: null,
+      status: 'done',
+    });
+
+    const descriptionMatch = await repository.create({
+      title: 'Description match',
+      description: `${searchToken.toLowerCase()} description`,
+      status: 'done',
+    });
+
+    const wrongStatus = await repository.create({
+      title: `${searchToken} wrong status`,
+      description: null,
+      status: 'todo',
+    });
+
+    createdTaskIds.push(titleMatch.id, descriptionMatch.id, wrongStatus.id);
+
+    const firstPage = await repository.list({
+      status: 'done',
+      search: searchToken,
+      page: 1,
+      pageSize: 1,
+    });
+
+    const secondPage = await repository.list({
+      status: 'done',
+      search: searchToken,
+      page: 2,
+      pageSize: 1,
+    });
+
+    expect(firstPage.total).toBe(2);
+    expect(firstPage.items).toHaveLength(1);
+
+    expect(secondPage.total).toBe(2);
+    expect(secondPage.items).toHaveLength(1);
+
+    const returnedIds = [firstPage.items[0]?.id, secondPage.items[0]?.id];
+
+    expect(returnedIds).toEqual(
+      expect.arrayContaining([titleMatch.id, descriptionMatch.id])
+    );
+
+    expect(returnedIds).not.toContain(wrongStatus.id);
   });
 });
