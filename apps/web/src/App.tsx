@@ -27,7 +27,7 @@ function App() {
           setTasks(page.data);
         }
       } catch (error) {
-        if (isCurrent) {~
+        if (isCurrent) {
           setErrorMessage(getErrorMessage(error));
         }
       } finally {
@@ -37,7 +37,7 @@ function App() {
       }
     }
 
-    loadTasks();
+    void loadTasks();
 
     return () => {
       isCurrent = false;
