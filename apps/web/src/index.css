@@ -70,3 +70,47 @@ h1 {
   border-radius: 0.75rem;
   background: #ffffff;
 }
+
+.error-message {
+  color: #b91c1c;
+}
+
+.task-list {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-card {
+  padding: 1.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+}
+
+.task-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.task-card h3 {
+  margin: 0;
+}
+
+.task-card p {
+  margin: 0.75rem 0 0;
+}
+
+.task-status {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  color: #3730a3;
+  background: #eef2ff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
