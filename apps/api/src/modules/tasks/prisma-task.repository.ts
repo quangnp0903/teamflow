@@ -108,4 +108,14 @@ export class PrismaTaskRepository implements TaskRepository {
       throw error;
     }
   }
+
+  async delete(id: string): Promise<boolean> {
+    const result = await this.client.task.deleteMany({
+      where: {
+        id,
+      },
+    });
+
+    return result.count === 1;
+  }
 }

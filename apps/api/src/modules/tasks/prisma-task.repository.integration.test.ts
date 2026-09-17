@@ -172,4 +172,20 @@ describe('PrismaTaskRepository', () => {
 
     expect(returnedIds).not.toContain(wrongStatus.id);
   });
+
+  it('deletes a persisted task', async () => {
+    const createdTask = await repository.create({
+      title: 'Delete persisted task',
+      description: null,
+      status: 'todo',
+    });
+
+    createdTaskIds.push(createdTask.id);
+
+    await expect(repository.delete(createdTask.id)).resolves.toBe(true);
+
+    await expect(repository.findById(createdTask.id)).resolves.toBeNull();
+
+    await expect(repository.delete(createdTask.id)).resolves.toBe(false);
+  });
 });

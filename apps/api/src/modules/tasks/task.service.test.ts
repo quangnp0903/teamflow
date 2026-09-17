@@ -50,4 +50,18 @@ describe('TaskService', () => {
       message: 'Task not found',
     });
   });
+
+  it('throws a typed error when deleting a missing task', async () => {
+    const repository = new InMemoryTaskRepository();
+    const service = new TaskService(repository);
+
+    await expect(
+      service.deleteTask('00000000-0000-4000-8000-000000000000')
+    ).rejects.toMatchObject({
+      name: 'AppError',
+      statusCode: 404,
+      code: 'TASK_NOT_FOUND',
+      message: 'Task not found',
+    });
+  });
 });

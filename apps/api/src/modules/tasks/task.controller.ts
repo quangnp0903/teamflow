@@ -56,4 +56,12 @@ export class TaskController {
       data: task,
     });
   };
+
+  remove = async (request: Request, response: Response) => {
+    const { taskId } = taskParamsSchema.parse(request.params);
+
+    await this.service.deleteTask(taskId);
+
+    response.status(204).send();
+  };
 }

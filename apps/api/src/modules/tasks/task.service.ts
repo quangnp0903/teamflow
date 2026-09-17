@@ -60,4 +60,12 @@ export class TaskService {
 
     return task;
   }
+
+  async deleteTask(id: string): Promise<void> {
+    const deleted = await this.repository.delete(id);
+
+    if (!deleted) {
+      throw new AppError(404, 'TASK_NOT_FOUND', 'Task not found');
+    }
+  }
 }

@@ -29,4 +29,5 @@ export interface TaskRepository {
   findById(id: string): Promise<Task | null>;
   create(input: CreateTaskRecord): Promise<Task>;
   update(id: string, input: UpdateTaskRecord): Promise<Task | null>;
+  delete(id: string): Promise<boolean>;
 }

@@ -289,4 +289,63 @@ describe('task API', () => {
       },
     });
   });
+
+  it('deletes an existing task', async () => {
+    const app = createTestApp();
+
+    const createResponse = await request(app).post('/api/tasks').send({
+      title: 'Delete this task',
+    });
+
+    const taskId = createResponse.body.data.id;
+
+    const deleteResponse = await request(app).delete(`/api/tasks/${taskId}`);
+
+    expect(deleteResponse.status).toBe(204);
+    expect(deleteResponse.text).toBe('');
+
+    const lookupResponse = await request(app).get(`/api/tasks/${taskId}`);
+
+    expect(lookupResponse.status).toBe(404);
+    expect(lookupResponse.body).toEqual({
+      error: {
+        code: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      },
+    });
+  });
+
+  it('returns not found when deleting a missing task', async () => {
+    const app = createTestApp();
+
+    const response = await request(app).delete(
+      '/api/tasks/00000000-0000-4000-8000-000000000000'
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: {
+        code: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      },
+    });
+  });
+
+  it('rejects a malformed task ID when deleting', async () => {
+    const app = createTestApp();
+
+    const response = await request(app).delete('/api/tasks/not-a-uuid');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        details: [
+          {
+            path: 'taskId',
+          },
+        ],
+      },
+    });
+  });
 });
