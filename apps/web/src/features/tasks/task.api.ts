@@ -4,6 +4,7 @@ import type {
   CreateTaskInput,
   Task,
   TaskResponse,
+  UpdateTaskInput,
 } from './task.types';
 
 type ErrorResponse = {
@@ -91,6 +92,24 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     },
     body: JSON.stringify(input),
   });
+
+  return response.data;
+}
+
+export async function updateTask(
+  taskId: string,
+  input: UpdateTaskInput
+): Promise<Task> {
+  const response = await request<TaskResponse>(
+    `/api/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    }
+  );
 
   return response.data;
 }

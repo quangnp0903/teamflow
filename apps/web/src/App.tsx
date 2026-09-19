@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 
-import { createTask, listTasks } from './features/tasks/task.api';
-import type { CreateTaskInput, Task } from './features/tasks/task.types';
+import { createTask, listTasks, updateTask } from './features/tasks/task.api';
+import type {
+  CreateTaskInput,
+  Task,
+  TaskStatus,
+} from './features/tasks/task.types';
 import CreateTaskForm from './features/tasks/CreateTaskForm';
+import TaskItem from './features/tasks/TaskItem';
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -21,6 +26,17 @@ function App() {
     const createdTask = await createTask(input);
 
     setTasks((currentTasks) => [createdTask, ...currentTasks]);
+  };
+
+  const handleTaskStatusChange = async (
+    taskId: string,
+    status: TaskStatus
+  ): Promise<void> => {
+    const updatedTask = await updateTask(taskId, { status });
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) => (task.id === taskId ? updatedTask : task))
+    );
   };
 
   useEffect(() => {
@@ -81,16 +97,11 @@ function App() {
         {!isLoading && errorMessage === null && tasks.length > 0 && (
           <ul className="task-list">
             {tasks.map((task) => (
-              <li className="task-card" key={task.id}>
-                <div className="task-card-header">
-                  <h3>{task.title}</h3>
-                  <span className="task-status">
-                    {task.status.replaceAll('_', ' ')}
-                  </span>
-                </div>
-
-                {task.description !== null && <p>{task.description}</p>}
-              </li>
+              <TaskItem
+                key={task.id}
+                task={task}
+                onStatusChange={handleTaskStatusChange}
+              />
             ))}
           </ul>
         )}

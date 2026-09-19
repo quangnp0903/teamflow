@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, listTasks, createTask } from './task.api.ts';
-import type { Task } from './task.types.ts';
+import { ApiError, listTasks, createTask, updateTask } from './task.api.ts';
+import type { Task, UpdateTaskInput } from './task.types.ts';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -127,5 +127,53 @@ describe('task API', () => {
     });
 
     expect(result).toEqual(createdTask);
+  });
+
+  it('updates a task with a JSON PATCH request', async () => {
+    const taskId = '00000000-0000-4000-8000-000000000001';
+
+    const input = {
+      status: 'in_progress',
+    } satisfies UpdateTaskInput;
+
+    const updatedTask = {
+      id: taskId,
+      title: 'Learn task updates',
+      description: null,
+      status: input.status,
+      createdAt: '2026-09-19T10:00:00.000Z',
+      updatedAt: '2026-09-19T11:00:00.000Z',
+    } satisfies Task;
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: updatedTask,
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+    );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await updateTask(taskId, input);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
+
+    expect(result).toEqual(updatedTask);
   });
 });

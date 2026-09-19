@@ -36,3 +36,9 @@ export type CreateTaskInput = Readonly<{
 export type TaskResponse = Readonly<{
   data: Task;
 }>;
+
+export type UpdateTaskInput = Readonly<{
+  title?: string;
+  description?: string | null;
+  status?: TaskStatus;
+}>;
