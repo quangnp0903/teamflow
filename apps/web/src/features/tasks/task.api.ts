@@ -1,4 +1,10 @@
-import type { ListTasksParams, TaskPage } from './task.types.ts';
+import type {
+  ListTasksParams,
+  TaskPage,
+  CreateTaskInput,
+  Task,
+  TaskResponse,
+} from './task.types';
 
 type ErrorResponse = {
   error?: {
@@ -20,10 +26,16 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(url: string): Promise<T> {
+type JsonRequestInit = Omit<RequestInit, 'headers'> & {
+  headers?: Readonly<Record<string, string>>;
+};
+
+async function request<T>(url: string, init: JsonRequestInit = {}): Promise<T> {
   const response = await fetch(url, {
+    ...init,
     headers: {
       Accept: 'application/json',
+      ...init.headers,
     },
   });
 
@@ -69,4 +81,16 @@ export function listTasks(params: ListTasksParams = {}): Promise<TaskPage> {
   const url = queryString === '' ? '/api/tasks' : `/api/tasks?${queryString}`;
 
   return request<TaskPage>(url);
+}
+
+export async function createTask(input: CreateTaskInput): Promise<Task> {
+  const response = await request<TaskResponse>('/api/tasks', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  return response.data;
 }

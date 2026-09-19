@@ -27,3 +27,12 @@ export type ListTasksParams = Readonly<{
   page?: number;
   pageSize?: number;
 }>;
+
+export type CreateTaskInput = Readonly<{
+  title: string;
+  description?: string | null;
+}>;
+
+export type TaskResponse = Readonly<{
+  data: Task;
+}>;
