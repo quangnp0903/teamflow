@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import { createTask, listTasks, updateTask } from './features/tasks/task.api';
+import {
+  createTask,
+  listTasks,
+  updateTask,
+  deleteTask,
+} from './features/tasks/task.api';
 import type {
   CreateTaskInput,
   Task,
@@ -36,6 +41,14 @@ function App() {
 
     setTasks((currentTasks) =>
       currentTasks.map((task) => (task.id === taskId ? updatedTask : task))
+    );
+  };
+
+  const handleDeleteTask = async (taskId: string): Promise<void> => {
+    await deleteTask(taskId);
+
+    setTasks((currentTasks) =>
+      currentTasks.filter((task) => task.id !== taskId)
     );
   };
 
@@ -101,6 +114,7 @@ function App() {
                 key={task.id}
                 task={task}
                 onStatusChange={handleTaskStatusChange}
+                onDelete={handleDeleteTask}
               />
             ))}
           </ul>

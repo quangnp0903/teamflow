@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, listTasks, createTask, updateTask } from './task.api.ts';
+import {
+  ApiError,
+  listTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+} from './task.api.ts';
 import type { Task, UpdateTaskInput } from './task.types.ts';
 
 afterEach(() => {
@@ -175,5 +181,26 @@ describe('task API', () => {
     });
 
     expect(result).toEqual(updatedTask);
+  });
+
+  it('deletes a task without parsing a response body', async () => {
+    const taskId = '00000000-0000-4000-8000-000000000001';
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(deleteTask(taskId)).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/tasks/${taskId}`, {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
   });
 });

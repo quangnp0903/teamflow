@@ -1,6 +1,7 @@
 import { type ChangeEvent, useState } from 'react';
 
 import { TASK_STATUSES, type Task, type TaskStatus } from './task.types';
+import styles from './TaskItem.module.css';
 
 const TASK_STATUS_LABELS = {
   todo: 'Todo',
@@ -11,6 +12,7 @@ const TASK_STATUS_LABELS = {
 type TaskItemProps = Readonly<{
   task: Task;
   onStatusChange(taskId: string, status: TaskStatus): Promise<void>;
+  onDelete(taskId: string): Promise<void>;
 }>;
 
 function getErrorMessage(error: unknown): string {
@@ -19,9 +21,16 @@ function getErrorMessage(error: unknown): string {
     : 'Task status could not be updated';
 }
 
-const TaskItem: React.FC<TaskItemProps> = ({ task, onStatusChange }) => {
+const TaskItem: React.FC<TaskItemProps> = ({
+  task,
+  onStatusChange,
+  onDelete,
+}) => {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const isBusy = isUpdating || isDeleting;
 
   const handleStatusChange = async (event: ChangeEvent<HTMLSelectElement>) => {
     const nextStatus = TASK_STATUSES.find(
@@ -44,15 +53,38 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onStatusChange }) => {
     }
   };
 
+  const handleDelete = async () => {
+    const shouldDelete = window.confirm(
+      `Delete "${task.title}"? This cannot be undone.`
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setErrorMessage(null);
+
+    try {
+      await onDelete(task.id);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Task could not be deleted'
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <li className="task-card">
-      <div className="task-card-header">
-        <h3>{task.title}</h3>
+    <li className={styles.card}>
+      <div className={styles.header}>
+        <h3 className={styles.title}>{task.title}</h3>
 
         <select
           aria-label={`Status for ${task.title}`}
-          className="task-status"
-          disabled={isUpdating}
+          className={styles.status}
+          disabled={isBusy}
           onChange={(event) => void handleStatusChange(event)}
           value={task.status}
         >
@@ -64,12 +96,27 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onStatusChange }) => {
         </select>
       </div>
 
-      {task.description !== null && <p>{task.description}</p>}
+      {task.description !== null && (
+        <p className={styles.description}>{task.description}</p>
+      )}
 
-      {isUpdating && <p role="status">Updating status…</p>}
+      <button
+        disabled={isBusy}
+        onClick={() => void handleDelete()}
+        type="button"
+        className={styles.deleteButton}
+      >
+        {isDeleting ? 'Deleting…' : 'Delete'}
+      </button>
+
+      {isUpdating && (
+        <p className={styles.statusMessage} role="status">
+          Updating status…
+        </p>
+      )}
 
       {errorMessage !== null && (
-        <p className="error-message" role="alert">
+        <p className={styles.errorMessage} role="alert">
           {errorMessage}
         </p>
       )}

@@ -31,7 +31,10 @@ type JsonRequestInit = Omit<RequestInit, 'headers'> & {
   headers?: Readonly<Record<string, string>>;
 };
 
-async function request<T>(url: string, init: JsonRequestInit = {}): Promise<T> {
+async function request(
+  url: string,
+  init: JsonRequestInit = {}
+): Promise<Response> {
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -55,6 +58,15 @@ async function request<T>(url: string, init: JsonRequestInit = {}): Promise<T> {
       errorBody.error?.code
     );
   }
+
+  return response;
+}
+
+async function requestJson<T>(
+  url: string,
+  init: JsonRequestInit = {}
+): Promise<T> {
+  const response = await request(url, init);
 
   return (await response.json()) as T;
 }
@@ -81,11 +93,11 @@ export function listTasks(params: ListTasksParams = {}): Promise<TaskPage> {
   const queryString = query.toString();
   const url = queryString === '' ? '/api/tasks' : `/api/tasks?${queryString}`;
 
-  return request<TaskPage>(url);
+  return requestJson<TaskPage>(url);
 }
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {
-  const response = await request<TaskResponse>('/api/tasks', {
+  const response = await requestJson<TaskResponse>('/api/tasks', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -100,7 +112,7 @@ export async function updateTask(
   taskId: string,
   input: UpdateTaskInput
 ): Promise<Task> {
-  const response = await request<TaskResponse>(
+  const response = await requestJson<TaskResponse>(
     `/api/tasks/${encodeURIComponent(taskId)}`,
     {
       method: 'PATCH',
@@ -112,4 +124,10 @@ export async function updateTask(
   );
 
   return response.data;
+}
+
+export async function deleteTask(taskId: string): Promise<void> {
+  await request(`/api/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'DELETE',
+  });
 }
