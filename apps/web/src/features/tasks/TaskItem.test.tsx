@@ -21,12 +21,12 @@ const task = {
 describe('TaskItem', () => {
   it('requests the selected status change', async () => {
     const user = userEvent.setup();
-    const onStatusChange = vi.fn().mockResolvedValue(undefined);
+    const onUpdate = vi.fn().mockResolvedValue(undefined);
 
     render(
       <TaskItem
         task={task}
-        onStatusChange={onStatusChange}
+        onUpdate={onUpdate}
         onDelete={vi.fn().mockResolvedValue(undefined)}
       />
     );
@@ -39,8 +39,8 @@ describe('TaskItem', () => {
 
     await user.selectOptions(statusSelect, 'in_progress');
 
-    expect(onStatusChange).toHaveBeenCalledOnce();
-    expect(onStatusChange).toHaveBeenCalledWith(task.id, 'in_progress');
+    expect(onUpdate).toHaveBeenCalledOnce();
+    expect(onUpdate).toHaveBeenCalledWith(task.id, { status: 'in_progress' });
   });
 
   it('confirms and requests task deletion', async () => {
@@ -53,7 +53,7 @@ describe('TaskItem', () => {
       <TaskItem
         task={task}
         onDelete={onDelete}
-        onStatusChange={vi.fn().mockResolvedValue(undefined)}
+        onUpdate={vi.fn().mockResolvedValue(undefined)}
       />
     );
 

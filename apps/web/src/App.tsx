@@ -11,7 +11,7 @@ import type {
   ListTasksParams,
   Task,
   TaskPageMeta,
-  TaskStatus,
+  UpdateTaskInput,
 } from './features/tasks/task.types';
 import CreateTaskForm from './features/tasks/CreateTaskForm';
 import TaskItem from './features/tasks/TaskItem';
@@ -58,11 +58,11 @@ function App() {
     refreshTasks();
   };
 
-  const handleTaskStatusChange = async (
+  const handleUpdateTask = async (
     taskId: string,
-    status: TaskStatus
+    input: UpdateTaskInput
   ): Promise<void> => {
-    await updateTask(taskId, { status });
+    await updateTask(taskId, input);
     refreshTasks();
   };
 
@@ -166,7 +166,7 @@ function App() {
               <TaskItem
                 key={task.id}
                 task={task}
-                onStatusChange={handleTaskStatusChange}
+                onUpdate={handleUpdateTask}
                 onDelete={handleDeleteTask}
               />
             ))}

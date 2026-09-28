@@ -44,3 +44,8 @@ export type UpdateTaskInput = Readonly<{
   description?: string | null;
   status?: TaskStatus;
 }>;
+
+export type TaskDetailsInput = Readonly<{
+  title: string;
+  description: string | null;
+}>;
