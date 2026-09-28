@@ -10,11 +10,13 @@ import type {
   CreateTaskInput,
   ListTasksParams,
   Task,
+  TaskPageMeta,
   TaskStatus,
 } from './features/tasks/task.types';
 import CreateTaskForm from './features/tasks/CreateTaskForm';
 import TaskItem from './features/tasks/TaskItem';
 import TaskFilters from './features/tasks/TaskFilters';
+import TaskPagination from './features/tasks/TaskPagination';
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -24,12 +26,23 @@ function getErrorMessage(error: unknown): string {
   return 'Tasks could not be loaded';
 }
 
+const PAGE_SIZE = 5;
+
+const INITIAL_PAGE_META = {
+  page: 1,
+  pageSize: PAGE_SIZE,
+  total: 0,
+  totalPages: 0,
+} satisfies TaskPageMeta;
+
 function App() {
   const [tasks, setTasks] = useState<readonly Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [filters, setFilters] = useState<ListTasksParams>({});
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageMeta, setPageMeta] = useState<TaskPageMeta>(INITIAL_PAGE_META);
 
   const hasActiveFilters =
     filters.search !== undefined || filters.status !== undefined;
@@ -61,25 +74,47 @@ function App() {
   const handleApplyFilters = (nextFilters: ListTasksParams) => {
     setIsLoading(true);
     setErrorMessage(null);
+    setPage(1);
     setFilters(nextFilters);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    setPage(nextPage);
   };
 
   useEffect(() => {
     let isCurrent = true;
 
     async function loadTasks() {
+      let shouldFinishLoading = true;
+
       try {
-        const page = await listTasks(filters);
+        const taskPage = await listTasks({
+          ...filters,
+          page,
+          pageSize: PAGE_SIZE,
+        });
 
         if (isCurrent) {
-          setTasks(page.data);
+          const lastAvailablePage = Math.max(taskPage.meta.totalPages, 1);
+
+          if (page > lastAvailablePage) {
+            shouldFinishLoading = false;
+            setPage(lastAvailablePage);
+            return;
+          }
+
+          setTasks(taskPage.data);
+          setPageMeta(taskPage.meta);
         }
       } catch (error) {
         if (isCurrent) {
           setErrorMessage(getErrorMessage(error));
         }
       } finally {
-        if (isCurrent) {
+        if (isCurrent && shouldFinishLoading) {
           setIsLoading(false);
         }
       }
@@ -90,7 +125,7 @@ function App() {
     return () => {
       isCurrent = false;
     };
-  }, [filters, refreshVersion]);
+  }, [filters, page, refreshVersion]);
 
   return (
     <main className="app-shell">
@@ -136,6 +171,16 @@ function App() {
               />
             ))}
           </ul>
+        )}
+
+        {errorMessage === null && (
+          <TaskPagination
+            disabled={isLoading}
+            page={pageMeta.page}
+            total={pageMeta.total}
+            totalPages={pageMeta.totalPages}
+            onPageChange={handlePageChange}
+          />
         )}
       </section>
     </main>

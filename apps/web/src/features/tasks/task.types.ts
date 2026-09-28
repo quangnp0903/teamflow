@@ -11,14 +11,16 @@ export type Task = Readonly<{
   updatedAt: string;
 }>;
 
+export type TaskPageMeta = Readonly<{
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}>;
+
 export type TaskPage = Readonly<{
   data: readonly Task[];
-  meta: Readonly<{
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-  }>;
+  meta: TaskPageMeta;
 }>;
 
 export type ListTasksParams = Readonly<{
