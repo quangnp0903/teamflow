@@ -8,11 +8,13 @@ import {
 } from './features/tasks/task.api';
 import type {
   CreateTaskInput,
+  ListTasksParams,
   Task,
   TaskStatus,
 } from './features/tasks/task.types';
 import CreateTaskForm from './features/tasks/CreateTaskForm';
 import TaskItem from './features/tasks/TaskItem';
+import TaskFilters from './features/tasks/TaskFilters';
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -26,30 +28,40 @@ function App() {
   const [tasks, setTasks] = useState<readonly Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [filters, setFilters] = useState<ListTasksParams>({});
+  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  const hasActiveFilters =
+    filters.search !== undefined || filters.status !== undefined;
+
+  const refreshTasks = () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    setRefreshVersion((currentVersion) => currentVersion + 1);
+  };
 
   const handleCreateTask = async (input: CreateTaskInput): Promise<void> => {
-    const createdTask = await createTask(input);
-
-    setTasks((currentTasks) => [createdTask, ...currentTasks]);
+    await createTask(input);
+    refreshTasks();
   };
 
   const handleTaskStatusChange = async (
     taskId: string,
     status: TaskStatus
   ): Promise<void> => {
-    const updatedTask = await updateTask(taskId, { status });
-
-    setTasks((currentTasks) =>
-      currentTasks.map((task) => (task.id === taskId ? updatedTask : task))
-    );
+    await updateTask(taskId, { status });
+    refreshTasks();
   };
 
   const handleDeleteTask = async (taskId: string): Promise<void> => {
     await deleteTask(taskId);
+    refreshTasks();
+  };
 
-    setTasks((currentTasks) =>
-      currentTasks.filter((task) => task.id !== taskId)
-    );
+  const handleApplyFilters = (nextFilters: ListTasksParams) => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    setFilters(nextFilters);
   };
 
   useEffect(() => {
@@ -57,7 +69,7 @@ function App() {
 
     async function loadTasks() {
       try {
-        const page = await listTasks();
+        const page = await listTasks(filters);
 
         if (isCurrent) {
           setTasks(page.data);
@@ -78,7 +90,7 @@ function App() {
     return () => {
       isCurrent = false;
     };
-  }, []);
+  }, [filters, refreshVersion]);
 
   return (
     <main className="app-shell">
@@ -95,6 +107,8 @@ function App() {
       <section className="task-section" aria-labelledby="task-heading">
         <h2 id="task-heading">My tasks</h2>
 
+        <TaskFilters disabled={isLoading} onApply={handleApplyFilters} />
+
         {isLoading && <p role="status">Loading tasks…</p>}
 
         {!isLoading && errorMessage !== null && (
@@ -104,7 +118,11 @@ function App() {
         )}
 
         {!isLoading && errorMessage === null && tasks.length === 0 && (
-          <p>No tasks yet.</p>
+          <p>
+            {hasActiveFilters
+              ? 'No tasks match these filters.'
+              : 'No tasks yet.'}
+          </p>
         )}
 
         {!isLoading && errorMessage === null && tasks.length > 0 && (
