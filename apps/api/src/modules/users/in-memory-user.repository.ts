@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import type { User, UserWithPasswordHash } from './user.model.ts';
-import type { CreateUserRecord, UserRepository } from './user.repository.ts';
+import type {
+  CreateUserRecord,
+  CreateUserResult,
+  UserRepository,
+} from './user.repository.ts';
 
 function toPublicUser(user: UserWithPasswordHash): User {
   return {
@@ -24,7 +28,15 @@ export class InMemoryUserRepository implements UserRepository {
     return this.users.find((user) => user.email === email) ?? null;
   }
 
-  async create(input: CreateUserRecord): Promise<User> {
+  async create(input: CreateUserRecord): Promise<CreateUserResult> {
+    const emailAlreadyExists = this.users.some(
+      (user) => user.email === input.email
+    );
+
+    if (emailAlreadyExists) {
+      return { status: 'email_conflict' };
+    }
+
     const now = new Date().toISOString();
 
     const user: UserWithPasswordHash = {
@@ -36,6 +48,9 @@ export class InMemoryUserRepository implements UserRepository {
 
     this.users.push(user);
 
-    return toPublicUser(user);
+    return {
+      status: 'created',
+      user: toPublicUser(user),
+    };
   }
 }

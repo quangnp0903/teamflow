@@ -6,7 +6,16 @@ export type CreateUserRecord = Readonly<{
   passwordHash: string;
 }>;
 
+export type CreateUserResult =
+  | Readonly<{
+      status: 'created';
+      user: User;
+    }>
+  | Readonly<{
+      status: 'email_conflict';
+    }>;
+
 export interface UserRepository {
   findByEmail(email: string): Promise<UserWithPasswordHash | null>;
-  create(input: CreateUserRecord): Promise<User>;
+  create(input: CreateUserRecord): Promise<CreateUserResult>;
 }
