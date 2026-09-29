@@ -2,10 +2,16 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import { InMemoryTaskRepository } from './modules/tasks/in-memory-task.repository.ts';
+import { FakePasswordHasher } from './modules/auth/fake-password-hasher.ts';
+import { InMemoryUserRepository } from './modules/users/in-memory-user.repository.ts';
 import { createApp } from './app.ts';
 
 function createTestApp() {
-  return createApp({ taskRepository: new InMemoryTaskRepository() });
+  return createApp({
+    taskRepository: new InMemoryTaskRepository(),
+    userRepository: new InMemoryUserRepository(),
+    passwordHasher: new FakePasswordHasher(),
+  });
 }
 
 describe('task API', () => {
@@ -345,6 +351,85 @@ describe('task API', () => {
             path: 'taskId',
           },
         ],
+      },
+    });
+  });
+});
+
+describe('auth API', () => {
+  const registrationInput = {
+    email: 'alice@example.com',
+    displayName: 'Alice Nguyen',
+    password: 'correct horse battery staple',
+  };
+
+  it('registers a normalized public user', async () => {
+    const app = createTestApp();
+
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        ...registrationInput,
+        email: '  ALICE@Example.COM  ',
+        displayName: '  Alice Nguyen  ',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({
+      email: 'alice@example.com',
+      displayName: 'Alice Nguyen',
+    });
+    expect(response.body.data.id).toEqual(expect.any(String));
+    expect(response.body.data.createdAt).toEqual(expect.any(String));
+    expect(response.body.data.updatedAt).toEqual(expect.any(String));
+    expect(response.body.data).not.toHaveProperty('passwordHash');
+  });
+
+  it('rejects invalid registration input', async () => {
+    const app = createTestApp();
+
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        ...registrationInput,
+        password: 'too short',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details: [
+          {
+            path: 'password',
+          },
+        ],
+      },
+    });
+  });
+
+  it('rejects a duplicate email', async () => {
+    const app = createTestApp();
+
+    const firstResponse = await request(app)
+      .post('/api/auth/register')
+      .send(registrationInput);
+
+    expect(firstResponse.status).toBe(201);
+
+    const duplicateResponse = await request(app)
+      .post('/api/auth/register')
+      .send({
+        ...registrationInput,
+        email: 'ALICE@example.com',
+      });
+
+    expect(duplicateResponse.status).toBe(409);
+    expect(duplicateResponse.body).toEqual({
+      error: {
+        code: 'EMAIL_ALREADY_REGISTERED',
+        message: 'An account with this email already exists',
       },
     });
   });

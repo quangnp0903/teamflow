@@ -2,10 +2,14 @@ import { createApp } from './app.ts';
 import { env } from './config/env.ts';
 import { prisma } from './lib/database/prisma.ts';
 import { PrismaTaskRepository } from './modules/tasks/prisma-task.repository.ts';
+import { Argon2PasswordHasher } from './modules/auth/argon2-password-hasher.ts';
+import { PrismaUserRepository } from './modules/users/prisma-user.repository.ts';
 
 const taskRepository = new PrismaTaskRepository(prisma);
+const userRepository = new PrismaUserRepository(prisma);
+const passwordHasher = new Argon2PasswordHasher();
 
-const app = createApp({ taskRepository });
+const app = createApp({ taskRepository, userRepository, passwordHasher });
 
 const server = app.listen(env.PORT, () => {
   console.info(`API listening at http://localhost:${env.PORT}`);

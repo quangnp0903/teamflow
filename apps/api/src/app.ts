@@ -6,12 +6,23 @@ import type { TaskRepository } from './modules/tasks/task.repository.ts';
 import { TaskController } from './modules/tasks/task.controller.ts';
 import { createTaskRouter } from './modules/tasks/task.routes.ts';
 import { TaskService } from './modules/tasks/task.service.ts';
+import { AuthController } from './modules/auth/auth.controller.ts';
+import type { PasswordHasher } from './modules/auth/password-hasher.ts';
+import { createAuthRouter } from './modules/auth/auth.routes.ts';
+import { AuthService } from './modules/auth/auth.service.ts';
+import type { UserRepository } from './modules/users/user.repository.ts';
 
 type AppDependencies = {
   taskRepository: TaskRepository;
+  userRepository: UserRepository;
+  passwordHasher: PasswordHasher;
 };
 
-export function createApp({ taskRepository }: AppDependencies) {
+export function createApp({
+  taskRepository,
+  userRepository,
+  passwordHasher,
+}: AppDependencies) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -22,12 +33,16 @@ export function createApp({ taskRepository }: AppDependencies) {
   const taskService = new TaskService(taskRepository);
   const taskController = new TaskController(taskService);
 
+  const authService = new AuthService(userRepository, passwordHasher);
+  const authController = new AuthController(authService);
+
   app.get('/api/health', (_request, response) => {
     response.status(200).json({
       data: { status: 'ok' },
     });
   });
 
+  app.use('/api/auth', createAuthRouter(authController));
   app.use('/api/tasks', createTaskRouter(taskController));
 
   app.use((_request, response) => {
