@@ -14,6 +14,7 @@ import { AuthService } from './modules/auth/auth.service.ts';
 import type { UserRepository } from './modules/users/user.repository.ts';
 import type { SessionRepository } from './modules/sessions/session.repository.ts';
 import type { SessionTokenManager } from './modules/auth/session-token-manager.ts';
+import { requireTrustedOrigin } from './middleware/require-trusted-origin.ts';
 
 type AppDependencies = {
   taskRepository: TaskRepository;
@@ -22,6 +23,7 @@ type AppDependencies = {
   passwordHasher: PasswordHasher;
   sessionTokenManager: SessionTokenManager;
   secureSessionCookie: boolean;
+  trustedOrigins: readonly string[];
 };
 
 export function createApp({
@@ -31,12 +33,14 @@ export function createApp({
   passwordHasher,
   sessionTokenManager,
   secureSessionCookie,
+  trustedOrigins,
 }: AppDependencies) {
   const app = express();
 
   app.disable('x-powered-by');
 
   app.use(helmet());
+  app.use('/api', requireTrustedOrigin(trustedOrigins));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
