@@ -8,6 +8,7 @@ export function createAuthRouter(controller: AuthController) {
   router.get('/me', controller.me);
   router.post('/register', controller.register);
   router.post('/login', controller.login);
+  router.post('/logout', controller.logout);
 
   return router;
 }

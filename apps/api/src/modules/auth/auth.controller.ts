@@ -55,4 +55,21 @@ export class AuthController {
       data: user,
     });
   };
+
+  logout = async (request: Request, response: Response) => {
+    const cookieValue: unknown = request.cookies[SESSION_COOKIE_NAME];
+
+    const token = typeof cookieValue === 'string' ? cookieValue : '';
+
+    await this.service.logout(token);
+
+    response.clearCookie(SESSION_COOKIE_NAME, {
+      httpOnly: true,
+      secure: this.secureSessionCookie,
+      sameSite: 'lax',
+      path: '/',
+    });
+
+    response.status(204).end();
+  };
 }

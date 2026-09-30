@@ -526,4 +526,61 @@ describe('auth API', () => {
       },
     });
   });
+
+  it('logs out, clears the cookie, and rejects reuse of the old session', async () => {
+    const app = createTestApp();
+    const agent = request.agent(app);
+
+    await agent.post('/api/auth/register').send(registrationInput);
+
+    const loginResponse = await agent.post('/api/auth/login').send({
+      email: registrationInput.email,
+      password: registrationInput.password,
+    });
+
+    expect(loginResponse.status).toBe(200);
+
+    // Save the original cookie to test session revocation later.
+    const sessionCookie =
+      loginResponse.headers['set-cookie']?.[0]?.split(';')[0];
+
+    if (sessionCookie === undefined) {
+      throw new Error('Expected login to set a session cookie');
+    }
+
+    const logoutResponse = await agent.post('/api/auth/logout');
+
+    expect(logoutResponse.status).toBe(204);
+    expect(logoutResponse.text).toBe('');
+
+    const clearedCookie = logoutResponse.headers['set-cookie']?.[0];
+
+    expect(clearedCookie).toContain('teamflow_session=;');
+    expect(clearedCookie).toContain('Path=/');
+    expect(clearedCookie).toContain('Expires=Thu, 01 Jan 1970');
+
+    // The browser no longer has an authenticated session.
+    const meResponse = await agent.get('/api/auth/me');
+
+    expect(meResponse.status).toBe(401);
+
+    // Even a copied cookie must fail after server-side revocation.
+    const replayResponse = await request(app)
+      .get('/api/auth/me')
+      .set('Cookie', sessionCookie);
+
+    expect(replayResponse.status).toBe(401);
+    expect(replayResponse.body.error.code).toBe('UNAUTHENTICATED');
+  });
+
+  it('allows repeated logout without an active session', async () => {
+    const app = createTestApp();
+
+    const firstResponse = await request(app).post('/api/auth/logout');
+
+    const secondResponse = await request(app).post('/api/auth/logout');
+
+    expect(firstResponse.status).toBe(204);
+    expect(secondResponse.status).toBe(204);
+  });
 });

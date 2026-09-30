@@ -145,4 +145,14 @@ export class AuthService {
 
     return user;
   }
+
+  async logout(token: string): Promise<void> {
+    if (token.length === 0) {
+      return;
+    }
+
+    const tokenHash = this.sessionTokenManager.hash(token);
+
+    await this.sessionRepository.deleteByTokenHash(tokenHash);
+  }
 }
