@@ -175,4 +175,56 @@ describe('AuthService', () => {
       message: 'Email or password is incorrect',
     });
   });
+
+  it('authenticates a valid session token', async () => {
+    const { authService } = createAuthService();
+
+    const user = await authService.register(REGISTRATION_INPUT);
+
+    const loginResult = await authService.login({
+      email: REGISTRATION_INPUT.email,
+      password: REGISTRATION_INPUT.password,
+    });
+
+    await expect(
+      authService.authenticateSession(loginResult.session.token)
+    ).resolves.toEqual(user);
+  });
+
+  it('rejects an unknown session token', async () => {
+    const { authService } = createAuthService();
+
+    await expect(
+      authService.authenticateSession('unknown-session-token')
+    ).rejects.toMatchObject({
+      statusCode: 401,
+      code: 'UNAUTHENTICATED',
+      message: 'Authentication required',
+    });
+  });
+
+  it('rejects and removes an expired session', async () => {
+    const { authService, sessionRepository, sessionTokenManager } =
+      createAuthService();
+
+    const user = await authService.register(REGISTRATION_INPUT);
+    const token = 'expired-session-token';
+    const tokenHash = sessionTokenManager.hash(token);
+
+    await sessionRepository.create({
+      userId: user.id,
+      tokenHash,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    await expect(authService.authenticateSession(token)).rejects.toMatchObject({
+      statusCode: 401,
+      code: 'UNAUTHENTICATED',
+      message: 'Authentication required',
+    });
+
+    await expect(
+      sessionRepository.findByTokenHash(tokenHash)
+    ).resolves.toBeNull();
+  });
 });

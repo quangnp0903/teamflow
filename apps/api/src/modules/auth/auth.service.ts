@@ -42,6 +42,10 @@ function emailAlreadyRegisteredError(): AppError {
   );
 }
 
+function unauthenticatedError(): AppError {
+  return new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
+}
+
 export class AuthService {
   private readonly userRepository: UserRepository;
   private readonly passwordHasher: PasswordHasher;
@@ -114,5 +118,31 @@ export class AuthService {
         expiresAt,
       },
     };
+  }
+
+  async authenticateSession(token: string): Promise<User> {
+    const tokenHash = this.sessionTokenManager.hash(token);
+    const session = await this.sessionRepository.findByTokenHash(tokenHash);
+
+    if (session === null) {
+      throw unauthenticatedError();
+    }
+
+    const sessionHasExpired =
+      new Date(session.expiresAt).getTime() <= Date.now();
+
+    if (sessionHasExpired) {
+      await this.sessionRepository.deleteByTokenHash(tokenHash);
+      throw unauthenticatedError();
+    }
+
+    const user = await this.userRepository.findById(session.userId);
+
+    if (user === null) {
+      await this.sessionRepository.deleteByTokenHash(tokenHash);
+      throw unauthenticatedError();
+    }
+
+    return user;
   }
 }
