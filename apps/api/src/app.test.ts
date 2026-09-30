@@ -5,12 +5,16 @@ import { InMemoryTaskRepository } from './modules/tasks/in-memory-task.repositor
 import { FakePasswordHasher } from './modules/auth/fake-password-hasher.ts';
 import { InMemoryUserRepository } from './modules/users/in-memory-user.repository.ts';
 import { createApp } from './app.ts';
+import { FakeSessionTokenManager } from './modules/auth/fake-session-token-manager.ts';
+import { InMemorySessionRepository } from './modules/sessions/in-memory-session.repository.ts';
 
 function createTestApp() {
   return createApp({
     taskRepository: new InMemoryTaskRepository(),
     userRepository: new InMemoryUserRepository(),
+    sessionRepository: new InMemorySessionRepository(),
     passwordHasher: new FakePasswordHasher(),
+    sessionTokenManager: new FakeSessionTokenManager(),
   });
 }
 

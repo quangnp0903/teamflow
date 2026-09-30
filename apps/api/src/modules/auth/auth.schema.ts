@@ -18,4 +18,12 @@ export const registerSchema = z
   })
   .strict();
 
+export const loginSchema = z
+  .object({
+    email: emailSchema,
+    password: z.string().min(1).max(128),
+  })
+  .strict();
+
+export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;

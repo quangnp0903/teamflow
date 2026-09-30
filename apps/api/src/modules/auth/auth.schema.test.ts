@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { registerSchema } from './auth.schema.ts';
+import { loginSchema, registerSchema } from './auth.schema.ts';
 
 const VALID_INPUT = {
   email: 'alice@example.com',
@@ -56,5 +56,48 @@ describe('registerSchema', () => {
     },
   ])('rejects $caseName', ({ input }) => {
     expect(registerSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+describe('loginSchema', () => {
+  it('normalizes the email but preserves the password exactly', () => {
+    const password = '  existing password  ';
+
+    const result = loginSchema.parse({
+      email: '  ALICE@Example.COM  ',
+      password,
+    });
+
+    expect(result).toEqual({
+      email: 'alice@example.com',
+      password,
+    });
+  });
+
+  it.each([
+    {
+      caseName: 'an invalid email',
+      input: {
+        email: 'not-an-email',
+        password: 'existing password',
+      },
+    },
+    {
+      caseName: 'an empty password',
+      input: {
+        email: 'alice@example.com',
+        password: '',
+      },
+    },
+    {
+      caseName: 'an unknown property',
+      input: {
+        email: 'alice@example.com',
+        password: 'existing password',
+        rememberMe: true,
+      },
+    },
+  ])('rejects $caseName', ({ input }) => {
+    expect(loginSchema.safeParse(input).success).toBe(false);
   });
 });

@@ -4,6 +4,8 @@ import { InMemoryUserRepository } from '../users/in-memory-user.repository.ts';
 import { AuthService } from './auth.service.ts';
 import { FakePasswordHasher } from './fake-password-hasher.ts';
 import type { UserRepository } from '../users/user.repository.ts';
+import { InMemorySessionRepository } from '../sessions/in-memory-session.repository.ts';
+import { FakeSessionTokenManager } from './fake-session-token-manager.ts';
 
 const REGISTRATION_INPUT = {
   email: 'alice@example.com',
@@ -14,11 +16,21 @@ const REGISTRATION_INPUT = {
 function createAuthService() {
   const userRepository = new InMemoryUserRepository();
   const passwordHasher = new FakePasswordHasher();
-  const authService = new AuthService(userRepository, passwordHasher);
+  const sessionRepository = new InMemorySessionRepository();
+  const sessionTokenManager = new FakeSessionTokenManager();
+
+  const authService = new AuthService(
+    userRepository,
+    passwordHasher,
+    sessionRepository,
+    sessionTokenManager
+  );
 
   return {
     authService,
     userRepository,
+    sessionRepository,
+    sessionTokenManager,
   };
 }
 
@@ -77,7 +89,9 @@ describe('AuthService', () => {
 
     const authService = new AuthService(
       conflictingRepository,
-      new FakePasswordHasher()
+      new FakePasswordHasher(),
+      new InMemorySessionRepository(),
+      new FakeSessionTokenManager()
     );
 
     await expect(
@@ -87,6 +101,74 @@ describe('AuthService', () => {
       statusCode: 409,
       code: 'EMAIL_ALREADY_REGISTERED',
       message: 'An account with this email already exists',
+    });
+  });
+
+  it('logs in a user and creates a session', async () => {
+    const { authService, sessionRepository, sessionTokenManager } =
+      createAuthService();
+
+    const user = await authService.register(REGISTRATION_INPUT);
+    const beforeLogin = Date.now();
+
+    const result = await authService.login({
+      email: REGISTRATION_INPUT.email,
+      password: REGISTRATION_INPUT.password,
+    });
+
+    const afterLogin = Date.now();
+    const expectedDuration = 7 * 24 * 60 * 60 * 1000;
+
+    expect(result.user).toEqual(user);
+    expect(result.user).not.toHaveProperty('passwordHash');
+    expect(result.session.token).toBe('test-session-token-1');
+
+    expect(result.session.expiresAt.getTime()).toBeGreaterThanOrEqual(
+      beforeLogin + expectedDuration
+    );
+    expect(result.session.expiresAt.getTime()).toBeLessThanOrEqual(
+      afterLogin + expectedDuration
+    );
+
+    const tokenHash = sessionTokenManager.hash(result.session.token);
+    const storedSession = await sessionRepository.findByTokenHash(tokenHash);
+
+    expect(storedSession).toMatchObject({
+      userId: user.id,
+      tokenHash,
+      expiresAt: result.session.expiresAt.toISOString(),
+    });
+  });
+
+  it('rejects an incorrect password', async () => {
+    const { authService } = createAuthService();
+
+    await authService.register(REGISTRATION_INPUT);
+
+    await expect(
+      authService.login({
+        email: REGISTRATION_INPUT.email,
+        password: 'incorrect password',
+      })
+    ).rejects.toMatchObject({
+      statusCode: 401,
+      code: 'INVALID_CREDENTIALS',
+      message: 'Email or password is incorrect',
+    });
+  });
+
+  it('uses the same error when the email does not exist', async () => {
+    const { authService } = createAuthService();
+
+    await expect(
+      authService.login({
+        email: 'missing@example.com',
+        password: 'incorrect password',
+      })
+    ).rejects.toMatchObject({
+      statusCode: 401,
+      code: 'INVALID_CREDENTIALS',
+      message: 'Email or password is incorrect',
     });
   });
 });

@@ -11,17 +11,23 @@ import type { PasswordHasher } from './modules/auth/password-hasher.ts';
 import { createAuthRouter } from './modules/auth/auth.routes.ts';
 import { AuthService } from './modules/auth/auth.service.ts';
 import type { UserRepository } from './modules/users/user.repository.ts';
+import type { SessionRepository } from './modules/sessions/session.repository.ts';
+import type { SessionTokenManager } from './modules/auth/session-token-manager.ts';
 
 type AppDependencies = {
   taskRepository: TaskRepository;
   userRepository: UserRepository;
+  sessionRepository: SessionRepository;
   passwordHasher: PasswordHasher;
+  sessionTokenManager: SessionTokenManager;
 };
 
 export function createApp({
   taskRepository,
   userRepository,
+  sessionRepository,
   passwordHasher,
+  sessionTokenManager,
 }: AppDependencies) {
   const app = express();
 
@@ -33,7 +39,12 @@ export function createApp({
   const taskService = new TaskService(taskRepository);
   const taskController = new TaskController(taskService);
 
-  const authService = new AuthService(userRepository, passwordHasher);
+  const authService = new AuthService(
+    userRepository,
+    passwordHasher,
+    sessionRepository,
+    sessionTokenManager
+  );
   const authController = new AuthController(authService);
 
   app.get('/api/health', (_request, response) => {
