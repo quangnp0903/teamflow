@@ -20,6 +20,7 @@ type AppDependencies = {
   sessionRepository: SessionRepository;
   passwordHasher: PasswordHasher;
   sessionTokenManager: SessionTokenManager;
+  secureSessionCookie: boolean;
 };
 
 export function createApp({
@@ -28,6 +29,7 @@ export function createApp({
   sessionRepository,
   passwordHasher,
   sessionTokenManager,
+  secureSessionCookie,
 }: AppDependencies) {
   const app = express();
 
@@ -45,7 +47,9 @@ export function createApp({
     sessionRepository,
     sessionTokenManager
   );
-  const authController = new AuthController(authService);
+  const authController = new AuthController(authService, {
+    secureSessionCookie,
+  });
 
   app.get('/api/health', (_request, response) => {
     response.status(200).json({

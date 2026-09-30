@@ -19,6 +19,7 @@ const app = createApp({
   sessionRepository,
   passwordHasher,
   sessionTokenManager,
+  secureSessionCookie: env.NODE_ENV === 'production',
 });
 
 const server = app.listen(env.PORT, () => {

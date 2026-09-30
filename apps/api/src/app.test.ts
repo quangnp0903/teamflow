@@ -15,6 +15,7 @@ function createTestApp() {
     sessionRepository: new InMemorySessionRepository(),
     passwordHasher: new FakePasswordHasher(),
     sessionTokenManager: new FakeSessionTokenManager(),
+    secureSessionCookie: false,
   });
 }
 
@@ -436,5 +437,56 @@ describe('auth API', () => {
         message: 'An account with this email already exists',
       },
     });
+  });
+
+  it('logs in and sets an HTTP-only session cookie', async () => {
+    const app = createTestApp();
+
+    await request(app).post('/api/auth/register').send(registrationInput);
+
+    const response = await request(app).post('/api/auth/login').send({
+      email: '  ALICE@Example.COM  ',
+      password: registrationInput.password,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      email: 'alice@example.com',
+      displayName: registrationInput.displayName,
+    });
+    expect(response.body.data).not.toHaveProperty('passwordHash');
+    expect(response.body).not.toHaveProperty('session');
+
+    const sessionCookies = response.headers['set-cookie'];
+
+    expect(sessionCookies).toHaveLength(1);
+    expect(sessionCookies?.[0]).toContain(
+      'teamflow_session=test-session-token-1'
+    );
+    expect(sessionCookies?.[0]).toContain('HttpOnly');
+    expect(sessionCookies?.[0]).toContain('SameSite=Lax');
+    expect(sessionCookies?.[0]).toContain('Path=/');
+    expect(sessionCookies?.[0]).toContain('Expires=');
+    expect(sessionCookies?.[0]).not.toContain('Secure');
+  });
+
+  it('rejects invalid credentials without setting a cookie', async () => {
+    const app = createTestApp();
+
+    await request(app).post('/api/auth/register').send(registrationInput);
+
+    const response = await request(app).post('/api/auth/login').send({
+      email: registrationInput.email,
+      password: 'incorrect password',
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        message: 'Email or password is incorrect',
+      },
+    });
+    expect(response.headers['set-cookie']).toBeUndefined();
   });
 });
