@@ -1,5 +1,6 @@
 import express from 'express';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 
 import { errorHandler } from './middleware/error-handler.ts';
 import type { TaskRepository } from './modules/tasks/task.repository.ts';
@@ -37,6 +38,7 @@ export function createApp({
 
   app.use(helmet());
   app.use(express.json({ limit: '1mb' }));
+  app.use(cookieParser());
 
   const taskService = new TaskService(taskRepository);
   const taskController = new TaskController(taskService);

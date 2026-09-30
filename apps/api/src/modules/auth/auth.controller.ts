@@ -43,4 +43,16 @@ export class AuthController {
       data: result.user,
     });
   };
+
+  me = async (request: Request, response: Response) => {
+    const cookieValue: unknown = request.cookies[SESSION_COOKIE_NAME];
+
+    const token = typeof cookieValue === 'string' ? cookieValue : '';
+
+    const user = await this.service.authenticateSession(token);
+
+    response.status(200).json({
+      data: user,
+    });
+  };
 }

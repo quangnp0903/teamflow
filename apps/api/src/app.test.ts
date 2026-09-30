@@ -489,4 +489,41 @@ describe('auth API', () => {
     });
     expect(response.headers['set-cookie']).toBeUndefined();
   });
+
+  it('returns the authenticated user from the session cookie', async () => {
+    const app = createTestApp();
+    const agent = request.agent(app);
+
+    await agent.post('/api/auth/register').send(registrationInput);
+
+    const loginResponse = await agent.post('/api/auth/login').send({
+      email: registrationInput.email,
+      password: registrationInput.password,
+    });
+
+    expect(loginResponse.status).toBe(200);
+
+    const response = await agent.get('/api/auth/me');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      email: registrationInput.email,
+      displayName: registrationInput.displayName,
+    });
+    expect(response.body.data).not.toHaveProperty('passwordHash');
+  });
+
+  it('rejects the current-user request without a valid session cookie', async () => {
+    const app = createTestApp();
+
+    const response = await request(app).get('/api/auth/me');
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: {
+        code: 'UNAUTHENTICATED',
+        message: 'Authentication required',
+      },
+    });
+  });
 });
