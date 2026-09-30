@@ -16,6 +16,9 @@ export type CreateUserResult =
     }>;
 
 export interface UserRepository {
+  findById(id: string): Promise<User | null>;
+
   findByEmail(email: string): Promise<UserWithPasswordHash | null>;
+
   create(input: CreateUserRecord): Promise<CreateUserResult>;
 }

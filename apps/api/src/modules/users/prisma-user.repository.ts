@@ -66,4 +66,14 @@ export class PrismaUserRepository implements UserRepository {
       throw error;
     }
   }
+
+  async findById(id: string): Promise<User | null> {
+    const user = await this.client.user.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    return user === null ? null : toPublicUser(user);
+  }
 }

@@ -91,6 +91,9 @@ describe('PrismaUserRepository', () => {
       ...createdUser,
       passwordHash,
     });
+    await expect(repository.findById(createdUser.id)).resolves.toEqual(
+      createdUser
+    );
   });
 
   it('returns null when an email does not exist', async () => {
@@ -123,5 +126,9 @@ describe('PrismaUserRepository', () => {
     ).resolves.toEqual({
       status: 'email_conflict',
     });
+  });
+
+  it('returns null when a user ID does not exist', async () => {
+    await expect(repository.findById(randomUUID())).resolves.toBeNull();
   });
 });

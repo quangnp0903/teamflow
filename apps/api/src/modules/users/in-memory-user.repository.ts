@@ -53,4 +53,10 @@ export class InMemoryUserRepository implements UserRepository {
       user: toPublicUser(user),
     };
   }
+
+  async findById(id: string): Promise<User | null> {
+    const user = this.users.find((candidate) => candidate.id === id);
+
+    return user === undefined ? null : toPublicUser(user);
+  }
 }

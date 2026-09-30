@@ -78,6 +78,10 @@ describe('AuthService', () => {
 
   it('maps a concurrent email conflict to the registration error', async () => {
     const conflictingRepository: UserRepository = {
+      async findById() {
+        return null;
+      },
+
       async findByEmail() {
         return null;
       },
