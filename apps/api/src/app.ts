@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 
 import { errorHandler } from './middleware/error-handler.ts';
 import type { TaskRepository } from './modules/tasks/task.repository.ts';
@@ -40,6 +41,17 @@ export function createApp({
   app.disable('x-powered-by');
 
   app.use(helmet());
+
+  app.use(
+    '/api',
+    cors({
+      origin: [...trustedOrigins],
+      credentials: true,
+      methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'],
+      allowedHeaders: ['Content-Type'],
+    })
+  );
+
   app.use('/api', requireTrustedOrigin(trustedOrigins));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());

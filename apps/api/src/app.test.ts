@@ -655,3 +655,52 @@ describe('auth API', () => {
     });
   });
 });
+
+describe('API CORS', () => {
+  it.each(TEST_ORIGINS)(
+    'allows credentialed responses for %s',
+    async (origin) => {
+      const app = createTestApp();
+
+      const response = await request(app)
+        .get('/api/health')
+        .set('Origin', origin);
+
+      expect(response.status).toBe(200);
+      expect(response.headers['access-control-allow-origin']).toBe(origin);
+      expect(response.headers['access-control-allow-credentials']).toBe('true');
+      expect(response.headers.vary).toContain('Origin');
+    }
+  );
+
+  it('handles a JSON POST preflight from a trusted origin', async () => {
+    const app = createTestApp();
+
+    const response = await request(app)
+      .options('/api/tasks')
+      .set('Origin', TEST_ORIGIN)
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'content-type');
+
+    expect(response.status).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe(TEST_ORIGIN);
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+    expect(
+      (response.headers['access-control-allow-methods'] ?? '').split(',')
+    ).toContain('POST');
+    expect(
+      (response.headers['access-control-allow-headers'] ?? '').toLowerCase()
+    ).toBe('content-type');
+  });
+
+  it('does not grant CORS access to an untrusted origin', async () => {
+    const app = createTestApp();
+
+    const response = await request(app)
+      .get('/api/health')
+      .set('Origin', 'https://untrusted.example');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
