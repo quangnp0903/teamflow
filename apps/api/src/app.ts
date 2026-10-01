@@ -16,6 +16,7 @@ import type { UserRepository } from './modules/users/user.repository.ts';
 import type { SessionRepository } from './modules/sessions/session.repository.ts';
 import type { SessionTokenManager } from './modules/auth/session-token-manager.ts';
 import { requireTrustedOrigin } from './middleware/require-trusted-origin.ts';
+import { requireAuth } from './middleware/require-auth.ts';
 
 type AppDependencies = {
   taskRepository: TaskRepository;
@@ -68,6 +69,7 @@ export function createApp({
   const authController = new AuthController(authService, {
     secureSessionCookie,
   });
+  const authenticate = requireAuth(authService);
 
   app.get('/api/health', (_request, response) => {
     response.status(200).json({
@@ -75,7 +77,7 @@ export function createApp({
     });
   });
 
-  app.use('/api/auth', createAuthRouter(authController));
+  app.use('/api/auth', createAuthRouter(authController, authenticate));
   app.use('/api/tasks', createTaskRouter(taskController));
 
   app.use((_request, response) => {

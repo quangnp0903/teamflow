@@ -2,8 +2,8 @@ import type { Request, Response } from 'express';
 
 import { loginSchema, registerSchema } from './auth.schema.ts';
 import type { AuthService } from './auth.service.ts';
-
-export const SESSION_COOKIE_NAME = 'teamflow_session';
+import { SESSION_COOKIE_NAME } from './auth.constants.ts';
+import { AppError } from '../../lib/errors/app-error.ts';
 
 type AuthControllerOptions = Readonly<{
   secureSessionCookie: boolean;
@@ -44,12 +44,12 @@ export class AuthController {
     });
   };
 
-  me = async (request: Request, response: Response) => {
-    const cookieValue: unknown = request.cookies[SESSION_COOKIE_NAME];
+  me = (request: Request, response: Response) => {
+    const user = request.user;
 
-    const token = typeof cookieValue === 'string' ? cookieValue : '';
-
-    const user = await this.service.authenticateSession(token);
+    if (user === undefined) {
+      throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
+    }
 
     response.status(200).json({
       data: user,
