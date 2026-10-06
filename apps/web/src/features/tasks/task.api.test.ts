@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  ApiError,
-  listTasks,
-  createTask,
-  updateTask,
-  deleteTask,
-} from './task.api.ts';
+import { ApiError } from '../../lib/http';
+
+import { listTasks, createTask, updateTask, deleteTask } from './task.api.ts';
 import type { Task, UpdateTaskInput } from './task.types.ts';
 
 afterEach(() => {
