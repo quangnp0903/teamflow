@@ -3,8 +3,11 @@ import TaskItem from './TaskItem';
 import TaskFilters from './TaskFilters';
 import TaskPagination from './TaskPagination';
 import useTasks from './useTasks';
+import useAuth from '../auth/useAuth';
+import LogoutButton from '../auth/LogoutButton';
 
 function TasksPage() {
+  const { logout } = useAuth();
   const {
     tasks,
     isLoading,
@@ -26,6 +29,7 @@ function TasksPage() {
         <p className="page-description">
           Organize your work and keep track of its progress.
         </p>
+        <LogoutButton onLogout={logout} />
       </header>
 
       <CreateTaskForm onCreate={createTask} disabled={isLoading} />

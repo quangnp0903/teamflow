@@ -1,8 +1,9 @@
+import LoginForm from './features/auth/LoginForm';
 import useAuth from './features/auth/useAuth';
 import TasksPage from './features/tasks/TasksPage';
 
 function App() {
-  const { state } = useAuth();
+  const { state, login } = useAuth();
 
   if (state.status === 'authenticated') {
     return <TasksPage />;
@@ -25,12 +26,7 @@ function App() {
         </p>
       )}
 
-      {state.status === 'unauthenticated' && (
-        <section className="task-section" aria-labelledby="sign-in-heading">
-          <h2 id="sign-in-heading">Sign in</h2>
-          <p>Sign in to manage your tasks.</p>
-        </section>
-      )}
+      {state.status === 'unauthenticated' && <LoginForm onLogin={login} />}
     </main>
   );
 }

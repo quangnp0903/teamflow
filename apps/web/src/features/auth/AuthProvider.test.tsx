@@ -8,6 +8,8 @@ import useAuth from './useAuth';
 
 vi.mock('./auth.api', () => ({
   getCurrentUser: vi.fn(),
+  loginUser: vi.fn(),
+  logoutUser: vi.fn(),
 }));
 
 const getCurrentUserMock = vi.mocked(getCurrentUser);

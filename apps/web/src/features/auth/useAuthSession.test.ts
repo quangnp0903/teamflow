@@ -1,15 +1,18 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getCurrentUser } from './auth.api';
+import { getCurrentUser, logoutUser } from './auth.api';
 import type { AuthUser } from './auth.types';
 import useAuthSession from './useAuthSession';
 
 vi.mock('./auth.api', () => ({
   getCurrentUser: vi.fn(),
+  loginUser: vi.fn(),
+  logoutUser: vi.fn(),
 }));
 
 const getCurrentUserMock = vi.mocked(getCurrentUser);
+const logoutUserMock = vi.mocked(logoutUser);
 
 const TEST_USER = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -21,6 +24,7 @@ const TEST_USER = {
 
 beforeEach(() => {
   getCurrentUserMock.mockReset();
+  logoutUserMock.mockReset();
 });
 
 describe('useAuthSession', () => {
@@ -65,6 +69,55 @@ describe('useAuthSession', () => {
         status: 'error',
         message: 'Your session could not be checked',
       });
+    });
+  });
+
+  it('becomes unauthenticated after successful logout', async () => {
+    getCurrentUserMock.mockResolvedValue(TEST_USER);
+    logoutUserMock.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useAuthSession());
+
+    await waitFor(() => {
+      expect(result.current.state).toEqual({
+        status: 'authenticated',
+        user: TEST_USER,
+      });
+    });
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(logoutUserMock).toHaveBeenCalledOnce();
+
+    expect(result.current.state).toEqual({
+      status: 'unauthenticated',
+    });
+  });
+
+  it('preserves the authenticated state when logout fails', async () => {
+    getCurrentUserMock.mockResolvedValue(TEST_USER);
+    logoutUserMock.mockRejectedValue(new Error('Sign out failed'));
+
+    const { result } = renderHook(() => useAuthSession());
+
+    await waitFor(() => {
+      expect(result.current.state).toEqual({
+        status: 'authenticated',
+        user: TEST_USER,
+      });
+    });
+
+    await act(async () => {
+      await expect(result.current.logout()).rejects.toThrow('Sign out failed');
+    });
+
+    expect(logoutUserMock).toHaveBeenCalledOnce();
+
+    expect(result.current.state).toEqual({
+      status: 'authenticated',
+      user: TEST_USER,
     });
   });
 });
