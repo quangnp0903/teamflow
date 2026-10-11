@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 
-import { getCurrentUser, loginUser, logoutUser } from './auth.api';
-import type { AuthState, LoginInput } from './auth.types';
+import {
+  getCurrentUser,
+  loginUser,
+  logoutUser,
+  registerUser,
+} from './auth.api';
+import type { AuthState, LoginInput, RegisterInput } from './auth.types';
 
 type UseAuthSessionResult = Readonly<{
   state: AuthState;
   login(input: LoginInput): Promise<void>;
   logout(): Promise<void>;
+  register(input: RegisterInput): Promise<void>;
 }>;
 
 function useAuthSession(): UseAuthSessionResult {
@@ -82,10 +88,19 @@ function useAuthSession(): UseAuthSessionResult {
     });
   }
 
+  async function register(input: RegisterInput): Promise<void> {
+    if (state.status !== 'unauthenticated') {
+      throw new Error('Sign up is only available when you are logged out');
+    }
+
+    await registerUser(input);
+  }
+
   return {
     state,
     login,
     logout,
+    register,
   };
 }
 

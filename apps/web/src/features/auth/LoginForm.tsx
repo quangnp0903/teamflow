@@ -1,7 +1,7 @@
 import { type FC, type SubmitEvent, useState } from 'react';
 
 import type { LoginInput } from './auth.types';
-import styles from './LoginForm.module.css';
+import styles from './AuthForm.module.css';
 
 type LoginFormProps = Readonly<{
   onLogin(input: LoginInput): Promise<void>;

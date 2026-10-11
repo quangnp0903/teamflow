@@ -9,6 +9,7 @@ vi.mock('./auth.api', () => ({
   getCurrentUser: vi.fn(),
   loginUser: vi.fn(),
   logoutUser: vi.fn(),
+  registerUser: vi.fn(),
 }));
 
 const getCurrentUserMock = vi.mocked(getCurrentUser);

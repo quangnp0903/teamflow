@@ -1,9 +1,9 @@
-import LoginForm from './features/auth/LoginForm';
+import AuthScreen from './features/auth/AuthScreen';
 import useAuth from './features/auth/useAuth';
 import TasksPage from './features/tasks/TasksPage';
 
 function App() {
-  const { state, login } = useAuth();
+  const { state } = useAuth();
 
   if (state.status === 'authenticated') {
     return <TasksPage />;
@@ -26,7 +26,7 @@ function App() {
         </p>
       )}
 
-      {state.status === 'unauthenticated' && <LoginForm onLogin={login} />}
+      {state.status === 'unauthenticated' && <AuthScreen />}
     </main>
   );
 }
