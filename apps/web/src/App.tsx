@@ -1,79 +1,36 @@
-import CreateTaskForm from './features/tasks/CreateTaskForm';
-import TaskItem from './features/tasks/TaskItem';
-import TaskFilters from './features/tasks/TaskFilters';
-import TaskPagination from './features/tasks/TaskPagination';
-import useTasks from './features/tasks/useTasks';
+import useAuth from './features/auth/useAuth';
+import TasksPage from './features/tasks/TasksPage';
 
 function App() {
-  const {
-    tasks,
-    isLoading,
-    errorMessage,
-    hasActiveFilters,
-    pageMeta,
-    createTask,
-    updateTask,
-    deleteTask,
-    applyFilters,
-    changePage,
-  } = useTasks();
+  const { state } = useAuth();
+
+  if (state.status === 'authenticated') {
+    return <TasksPage />;
+  }
 
   return (
     <main className="app-shell">
       <header className="page-header">
         <p className="eyebrow">TeamFlow</p>
-        <h1>Tasks</h1>
-        <p className="page-description">
-          Organize your work and keep track of its progress.
-        </p>
+        <h1>Welcome to TeamFlow</h1>
       </header>
 
-      <CreateTaskForm onCreate={createTask} disabled={isLoading} />
+      {state.status === 'loading' && (
+        <p role="status">Checking your session…</p>
+      )}
 
-      <section className="task-section" aria-labelledby="task-heading">
-        <h2 id="task-heading">My tasks</h2>
+      {state.status === 'error' && (
+        <p role="alert" className="error-message">
+          {state.message}
+        </p>
+      )}
 
-        <TaskFilters disabled={isLoading} onApply={applyFilters} />
-
-        {isLoading && <p role="status">Loading tasks…</p>}
-
-        {!isLoading && errorMessage !== null && (
-          <p className="error-message" role="alert">
-            {errorMessage}
-          </p>
-        )}
-
-        {!isLoading && errorMessage === null && tasks.length === 0 && (
-          <p>
-            {hasActiveFilters
-              ? 'No tasks match these filters.'
-              : 'No tasks yet.'}
-          </p>
-        )}
-
-        {!isLoading && errorMessage === null && tasks.length > 0 && (
-          <ul className="task-list">
-            {tasks.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onUpdate={updateTask}
-                onDelete={deleteTask}
-              />
-            ))}
-          </ul>
-        )}
-
-        {errorMessage === null && (
-          <TaskPagination
-            disabled={isLoading}
-            page={pageMeta.page}
-            total={pageMeta.total}
-            totalPages={pageMeta.totalPages}
-            onPageChange={changePage}
-          />
-        )}
-      </section>
+      {state.status === 'unauthenticated' && (
+        <section className="task-section" aria-labelledby="sign-in-heading">
+          <h2 id="sign-in-heading">Sign in</h2>
+          <p>Sign in to manage your tasks.</p>
+        </section>
+      )}
     </main>
   );
 }
