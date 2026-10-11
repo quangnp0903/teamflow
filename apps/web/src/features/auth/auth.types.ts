@@ -20,3 +20,19 @@ export type LoginInput = Readonly<{
 export type AuthUserResponse = Readonly<{
   data: AuthUser;
 }>;
+
+export type AuthState =
+  | Readonly<{
+      status: 'loading';
+    }>
+  | Readonly<{
+      status: 'authenticated';
+      user: AuthUser;
+    }>
+  | Readonly<{
+      status: 'unauthenticated';
+    }>
+  | Readonly<{
+      status: 'error';
+      message: string;
+    }>;
