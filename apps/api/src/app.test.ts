@@ -27,15 +27,70 @@ function createTestApp() {
   });
 }
 
-function browserRequest(app: ReturnType<typeof createApp>) {
-  return request.agent(app).set('Origin', TEST_ORIGIN);
+function browserRequest(
+  app: ReturnType<typeof createApp>,
+  origin: string = TEST_ORIGIN
+) {
+  return request.agent(app).set('Origin', origin);
 }
+
+async function authenticatedBrowserRequest(
+  app: ReturnType<typeof createApp>,
+  origin: string = TEST_ORIGIN,
+  email: string = 'task-owner@example.com'
+) {
+  const agent = browserRequest(app, origin);
+
+  const registrationInput = {
+    email,
+    displayName: 'Task Owner',
+    password: 'Strong test password 123!',
+  };
+
+  await agent.post('/api/auth/register').send(registrationInput).expect(201);
+
+  await agent
+    .post('/api/auth/login')
+    .send({
+      email: registrationInput.email,
+      password: registrationInput.password,
+    })
+    .expect(200);
+
+  return agent;
+}
+
+describe('task API authentication', () => {
+  const taskPath = '/api/tasks/00000000-0000-4000-8000-000000000000';
+
+  it.each([
+    { method: 'get', path: '/api/tasks' },
+    { method: 'post', path: '/api/tasks' },
+    { method: 'get', path: taskPath },
+    { method: 'patch', path: taskPath },
+    { method: 'delete', path: taskPath },
+  ] as const)('rejects anonymous $method $path', async ({ method, path }) => {
+    const app = createTestApp();
+
+    // Trusted origin, but no authenticated session.
+    const response = await browserRequest(app)[method](path);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: {
+        code: 'UNAUTHENTICATED',
+        message: 'Authentication required',
+      },
+    });
+  });
+});
 
 describe('task API', () => {
   it('creates a task and returns it from the list endpoint', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const createResponse = await browserRequest(app).post('/api/tasks').send({
+    const createResponse = await agent.post('/api/tasks').send({
       title: 'Design task module',
       description: 'Learn backend boundaries',
     });
@@ -49,16 +104,21 @@ describe('task API', () => {
 
     expect(createResponse.body.data.id).toEqual(expect.any(String));
 
-    const listResponse = await browserRequest(app).get('/api/tasks');
+    const listResponse = await agent.get('/api/tasks');
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.data).toEqual([createResponse.body.data]);
+
+    const meResponse = await agent.get('/api/auth/me').expect(200);
+
+    expect(createResponse.body.data.ownerId).toBe(meResponse.body.data.id);
   });
 
   it('rejects an invalid task payload', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app).post('/api/tasks').send({
+    const response = await agent.post('/api/tasks').send({
       title: '',
     });
 
@@ -78,8 +138,9 @@ describe('task API', () => {
 
   it('returns a stable error for an unknown route', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app).get('/api/unknown');
+    const response = await agent.get('/api/unknown');
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({
@@ -92,13 +153,14 @@ describe('task API', () => {
 
   it('partially updates a task and preserves omitted fields', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const createResponse = await browserRequest(app).post('/api/tasks').send({
+    const createResponse = await agent.post('/api/tasks').send({
       title: 'Original title',
       description: 'Original description',
     });
 
-    const response = await browserRequest(app)
+    const response = await agent
       .patch(`/api/tasks/${createResponse.body.data.id}`)
       .send({
         description: null,
@@ -116,12 +178,13 @@ describe('task API', () => {
 
   it('rejects an empty task update', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const createResponse = await browserRequest(app).post('/api/tasks').send({
+    const createResponse = await agent.post('/api/tasks').send({
       title: 'Unchanged task',
     });
 
-    const response = await browserRequest(app)
+    const response = await agent
       .patch(`/api/tasks/${createResponse.body.data.id}`)
       .send({});
 
@@ -135,12 +198,13 @@ describe('task API', () => {
 
   it('rejects an invalid task status', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const createResponse = await browserRequest(app).post('/api/tasks').send({
+    const createResponse = await agent.post('/api/tasks').send({
       title: 'Status validation',
     });
 
-    const response = await browserRequest(app)
+    const response = await agent
       .patch(`/api/tasks/${createResponse.body.data.id}`)
       .send({
         status: 'finished',
@@ -156,8 +220,9 @@ describe('task API', () => {
 
   it('returns not found when updating a missing task', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app)
+    const response = await agent
       .patch('/api/tasks/00000000-0000-4000-8000-000000000000')
       .send({
         title: 'Updated title',
@@ -174,12 +239,13 @@ describe('task API', () => {
 
   it('returns a task by ID', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const createResponse = await browserRequest(app).post('/api/tasks').send({
+    const createResponse = await agent.post('/api/tasks').send({
       title: 'Implement task lookup',
     });
 
-    const response = await browserRequest(app).get(
+    const response = await agent.get(
       `/api/tasks/${createResponse.body.data.id}`
     );
 
@@ -189,8 +255,9 @@ describe('task API', () => {
 
   it('returns a typed error when a task does not exist', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app).get(
+    const response = await agent.get(
       '/api/tasks/00000000-0000-4000-8000-000000000000'
     );
 
@@ -205,8 +272,9 @@ describe('task API', () => {
 
   it('rejects a malformed task ID', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app).get('/api/tasks/not-a-uuid');
+    const response = await agent.get('/api/tasks/not-a-uuid');
 
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({
@@ -223,24 +291,21 @@ describe('task API', () => {
 
   it('filters tasks by status', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    await browserRequest(app).post('/api/tasks').send({
+    await agent.post('/api/tasks').send({
       title: 'Todo task',
     });
 
-    const createResponse = await browserRequest(app).post('/api/tasks').send({
+    const createResponse = await agent.post('/api/tasks').send({
       title: 'Active task',
     });
 
-    await browserRequest(app)
-      .patch(`/api/tasks/${createResponse.body.data.id}`)
-      .send({
-        status: 'in_progress',
-      });
+    await agent.patch(`/api/tasks/${createResponse.body.data.id}`).send({
+      status: 'in_progress',
+    });
 
-    const response = await browserRequest(app).get(
-      '/api/tasks?status=in_progress'
-    );
+    const response = await agent.get('/api/tasks?status=in_progress');
 
     expect(response.status).toBe(200);
     expect(response.body.data).toHaveLength(1);
@@ -252,19 +317,18 @@ describe('task API', () => {
 
   it('searches task titles and descriptions', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    await browserRequest(app).post('/api/tasks').send({
+    await agent.post('/api/tasks').send({
       title: 'Design database schema',
     });
 
-    await browserRequest(app).post('/api/tasks').send({
+    await agent.post('/api/tasks').send({
       title: 'Build dashboard',
       description: 'Connect the React application',
     });
 
-    const response = await browserRequest(app).get(
-      '/api/tasks?search=DATABASE'
-    );
+    const response = await agent.get('/api/tasks?search=DATABASE');
 
     expect(response.status).toBe(200);
     expect(response.body.data).toHaveLength(1);
@@ -273,14 +337,13 @@ describe('task API', () => {
 
   it('returns a paginated task collection', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
     for (const title of ['Task one', 'Task two', 'Task three']) {
-      await browserRequest(app).post('/api/tasks').send({ title });
+      await agent.post('/api/tasks').send({ title });
     }
 
-    const firstPage = await browserRequest(app).get(
-      '/api/tasks?page=1&pageSize=2'
-    );
+    const firstPage = await agent.get('/api/tasks?page=1&pageSize=2');
 
     expect(firstPage.status).toBe(200);
     expect(firstPage.body.data).toHaveLength(2);
@@ -291,9 +354,7 @@ describe('task API', () => {
       totalPages: 2,
     });
 
-    const secondPage = await browserRequest(app).get(
-      '/api/tasks?page=2&pageSize=2'
-    );
+    const secondPage = await agent.get('/api/tasks?page=2&pageSize=2');
 
     expect(secondPage.status).toBe(200);
     expect(secondPage.body.data).toHaveLength(1);
@@ -307,8 +368,9 @@ describe('task API', () => {
 
   it('rejects invalid pagination parameters', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app).get('/api/tasks?page=0');
+    const response = await agent.get('/api/tasks?page=0');
 
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({
@@ -325,23 +387,20 @@ describe('task API', () => {
 
   it('deletes an existing task', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const createResponse = await browserRequest(app).post('/api/tasks').send({
+    const createResponse = await agent.post('/api/tasks').send({
       title: 'Delete this task',
     });
 
     const taskId = createResponse.body.data.id;
 
-    const deleteResponse = await browserRequest(app).delete(
-      `/api/tasks/${taskId}`
-    );
+    const deleteResponse = await agent.delete(`/api/tasks/${taskId}`);
 
     expect(deleteResponse.status).toBe(204);
     expect(deleteResponse.text).toBe('');
 
-    const lookupResponse = await browserRequest(app).get(
-      `/api/tasks/${taskId}`
-    );
+    const lookupResponse = await agent.get(`/api/tasks/${taskId}`);
 
     expect(lookupResponse.status).toBe(404);
     expect(lookupResponse.body).toEqual({
@@ -354,8 +413,9 @@ describe('task API', () => {
 
   it('returns not found when deleting a missing task', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app).delete(
+    const response = await agent.delete(
       '/api/tasks/00000000-0000-4000-8000-000000000000'
     );
 
@@ -370,8 +430,9 @@ describe('task API', () => {
 
   it('rejects a malformed task ID when deleting', async () => {
     const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
 
-    const response = await browserRequest(app).delete('/api/tasks/not-a-uuid');
+    const response = await agent.delete('/api/tasks/not-a-uuid');
 
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({
@@ -384,6 +445,186 @@ describe('task API', () => {
         ],
       },
     });
+  });
+
+  it('lists only the authenticated user’s tasks and totals', async () => {
+    const app = createTestApp();
+
+    const alice = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'alice@example.com'
+    );
+
+    const bob = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'bob@example.com'
+    );
+
+    const aliceTask = await alice
+      .post('/api/tasks')
+      .send({ title: 'Shared Alice task' })
+      .expect(201);
+
+    const bobTask = await bob
+      .post('/api/tasks')
+      .send({ title: 'Shared Bob task' })
+      .expect(201);
+
+    const path = '/api/tasks?search=Shared&status=todo&page=1&pageSize=1';
+
+    const aliceList = await alice.get(path).expect(200);
+    const bobList = await bob.get(path).expect(200);
+
+    expect(aliceList.body.data).toEqual([aliceTask.body.data]);
+    expect(bobList.body.data).toEqual([bobTask.body.data]);
+
+    const expectedMeta = {
+      page: 1,
+      pageSize: 1,
+      total: 1,
+      totalPages: 1,
+    };
+
+    expect(aliceList.body.meta).toEqual(expectedMeta);
+    expect(bobList.body.meta).toEqual(expectedMeta);
+  });
+
+  it('returns a task only to its owner', async () => {
+    const app = createTestApp();
+
+    const alice = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'alice@example.com'
+    );
+
+    const bob = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'bob@example.com'
+    );
+
+    const created = await alice
+      .post('/api/tasks')
+      .send({ title: 'Alice private task' })
+      .expect(201);
+
+    const path = `/api/tasks/${created.body.data.id}`;
+
+    const ownerResponse = await alice.get(path).expect(200);
+
+    expect(ownerResponse.body.data).toEqual(created.body.data);
+
+    const otherUserResponse = await bob.get(path).expect(404);
+
+    expect(otherUserResponse.body).toEqual({
+      error: {
+        code: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      },
+    });
+  });
+
+  it('allows updates only by the task owner', async () => {
+    const app = createTestApp();
+
+    const alice = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'alice@example.com'
+    );
+
+    const bob = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'bob@example.com'
+    );
+
+    const created = await alice
+      .post('/api/tasks')
+      .send({
+        title: 'Alice private task',
+        description: 'Original description',
+      })
+      .expect(201);
+
+    const path = `/api/tasks/${created.body.data.id}`;
+
+    const denied = await bob
+      .patch(path)
+      .send({
+        title: 'Unauthorized change',
+        status: 'done',
+      })
+      .expect(404);
+
+    expect(denied.body).toEqual({
+      error: {
+        code: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      },
+    });
+
+    const unchanged = await alice.get(path).expect(200);
+
+    expect(unchanged.body.data).toEqual(created.body.data);
+
+    const updated = await alice
+      .patch(path)
+      .send({ status: 'in_progress' })
+      .expect(200);
+
+    expect(updated.body.data).toMatchObject({
+      id: created.body.data.id,
+      ownerId: created.body.data.ownerId,
+      title: 'Alice private task',
+      description: 'Original description',
+      status: 'in_progress',
+    });
+  });
+
+  it('allows deletion only by the task owner', async () => {
+    const app = createTestApp();
+
+    const alice = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'alice@example.com'
+    );
+
+    const bob = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'bob@example.com'
+    );
+
+    const created = await alice
+      .post('/api/tasks')
+      .send({ title: 'Alice private task' })
+      .expect(201);
+
+    const path = `/api/tasks/${created.body.data.id}`;
+
+    const denied = await bob.delete(path).expect(404);
+
+    expect(denied.body).toEqual({
+      error: {
+        code: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      },
+    });
+
+    const unchanged = await alice.get(path).expect(200);
+
+    expect(unchanged.body.data).toEqual(created.body.data);
+
+    const deleted = await alice.delete(path).expect(204);
+
+    expect(deleted.text).toBe('');
+
+    await alice.get(path).expect(404);
   });
 });
 
@@ -595,7 +836,7 @@ describe('auth API', () => {
     expect(meResponse.status).toBe(401);
 
     // Even a copied cookie must fail after server-side revocation.
-    const replayResponse = await browserRequest(app)
+    const replayResponse = await agent
       .get('/api/auth/me')
       .set('Cookie', sessionCookie);
 
@@ -623,9 +864,11 @@ describe('auth API', () => {
       },
     ])('blocks a mutation with $caseName', async ({ origin }) => {
       const app = createTestApp();
+      const agent = await authenticatedBrowserRequest(app);
 
-      const mutation = request(app)
+      const mutation = agent
         .post('/api/tasks')
+        .unset('Origin')
         .send({ title: 'This must not be created' });
 
       if (origin !== undefined) {
@@ -637,7 +880,7 @@ describe('auth API', () => {
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('UNTRUSTED_ORIGIN');
 
-      const listResponse = await request(app).get('/api/tasks');
+      const listResponse = await agent.get('/api/tasks');
 
       expect(listResponse.status).toBe(200);
       expect(listResponse.body.data).toEqual([]);
@@ -645,11 +888,11 @@ describe('auth API', () => {
 
     it('accepts the second configured origin', async () => {
       const app = createTestApp();
+      const agent = await authenticatedBrowserRequest(app, TEST_ORIGINS[1]);
 
-      const response = await request(app)
-        .post('/api/tasks')
-        .set('Origin', TEST_ORIGINS[1])
-        .send({ title: 'Task from the second frontend' });
+      const response = await agent.post('/api/tasks').send({
+        title: 'Task from the second frontend',
+      });
 
       expect(response.status).toBe(201);
     });

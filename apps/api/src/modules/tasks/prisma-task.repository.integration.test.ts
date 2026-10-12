@@ -7,6 +7,7 @@ import { PrismaClient } from '../../generated/prisma/client.ts';
 import { PrismaTaskRepository } from './prisma-task.repository.ts';
 
 const { parsed, error } = config({ path: '.env.test' });
+const ownerId = randomUUID();
 
 if (error) {
   throw new Error('Could not load .env.test', { cause: error });
@@ -38,6 +39,15 @@ const createdTaskIds: string[] = [];
 describe('PrismaTaskRepository', () => {
   beforeAll(async () => {
     await prisma.$connect();
+
+    await prisma.user.create({
+      data: {
+        id: ownerId,
+        email: `task-owner-${ownerId}@example.com`,
+        displayName: 'Task owner',
+        passwordHash: 'unused-in-repository-test',
+      },
+    });
   });
 
   afterEach(async () => {
@@ -55,11 +65,22 @@ describe('PrismaTaskRepository', () => {
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    try {
+      await prisma.task.deleteMany({
+        where: { ownerId },
+      });
+
+      await prisma.user.deleteMany({
+        where: { id: ownerId },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   it('creates, finds, and lists a persisted task', async () => {
     const createdTask = await repository.create({
+      ownerId,
       title: 'Test Prisma repository',
       description: null,
       status: 'todo',
@@ -76,18 +97,35 @@ describe('PrismaTaskRepository', () => {
     expect(createdTask.createdAt).toEqual(expect.any(String));
     expect(createdTask.updatedAt).toEqual(expect.any(String));
 
-    await expect(repository.findById(createdTask.id)).resolves.toEqual(
+    await expect(repository.findById(ownerId, createdTask.id)).resolves.toEqual(
       createdTask
     );
 
-    const page = await repository.list({ page: 1, pageSize: 20 });
+    const page = await repository.list(ownerId, { page: 1, pageSize: 20 });
 
-    expect(page.items).toContainEqual(createdTask);
-    expect(page.total).toBeGreaterThanOrEqual(1);
+    expect(page).toEqual({
+      items: [createdTask],
+      total: 1,
+    });
+
+    await expect(
+      repository.list(randomUUID(), {
+        page: 1,
+        pageSize: 20,
+      })
+    ).resolves.toEqual({
+      items: [],
+      total: 0,
+    });
+
+    await expect(
+      repository.findById(randomUUID(), createdTask.id)
+    ).resolves.toBeNull();
   });
 
   it('updates a persisted task', async () => {
     const createdTask = await repository.create({
+      ownerId,
       title: 'Original title',
       description: null,
       status: 'todo',
@@ -95,7 +133,17 @@ describe('PrismaTaskRepository', () => {
 
     createdTaskIds.push(createdTask.id);
 
-    const updatedTask = await repository.update(createdTask.id, {
+    await expect(
+      repository.update(randomUUID(), createdTask.id, {
+        title: 'Unauthorized change',
+      })
+    ).resolves.toBeNull();
+
+    await expect(repository.findById(ownerId, createdTask.id)).resolves.toEqual(
+      createdTask
+    );
+
+    const updatedTask = await repository.update(ownerId, createdTask.id, {
       title: 'Updated title',
       description: 'Stored in PostgreSQL',
       status: 'done',
@@ -112,10 +160,10 @@ describe('PrismaTaskRepository', () => {
   it('returns null when a task does not exist', async () => {
     const missingId = '00000000-0000-4000-8000-000000000000';
 
-    await expect(repository.findById(missingId)).resolves.toBeNull();
+    await expect(repository.findById(ownerId, missingId)).resolves.toBeNull();
 
     await expect(
-      repository.update(missingId, {
+      repository.update(ownerId, missingId, {
         status: 'done',
       })
     ).resolves.toBeNull();
@@ -125,18 +173,21 @@ describe('PrismaTaskRepository', () => {
     const searchToken = `Db${randomUUID().replaceAll('-', '')}`;
 
     const titleMatch = await repository.create({
+      ownerId,
       title: `${searchToken.toUpperCase()} title match`,
       description: null,
       status: 'done',
     });
 
     const descriptionMatch = await repository.create({
+      ownerId,
       title: 'Description match',
       description: `${searchToken.toLowerCase()} description`,
       status: 'done',
     });
 
     const wrongStatus = await repository.create({
+      ownerId,
       title: `${searchToken} wrong status`,
       description: null,
       status: 'todo',
@@ -144,14 +195,14 @@ describe('PrismaTaskRepository', () => {
 
     createdTaskIds.push(titleMatch.id, descriptionMatch.id, wrongStatus.id);
 
-    const firstPage = await repository.list({
+    const firstPage = await repository.list(ownerId, {
       status: 'done',
       search: searchToken,
       page: 1,
       pageSize: 1,
     });
 
-    const secondPage = await repository.list({
+    const secondPage = await repository.list(ownerId, {
       status: 'done',
       search: searchToken,
       page: 2,
@@ -175,6 +226,7 @@ describe('PrismaTaskRepository', () => {
 
   it('deletes a persisted task', async () => {
     const createdTask = await repository.create({
+      ownerId,
       title: 'Delete persisted task',
       description: null,
       status: 'todo',
@@ -182,10 +234,24 @@ describe('PrismaTaskRepository', () => {
 
     createdTaskIds.push(createdTask.id);
 
-    await expect(repository.delete(createdTask.id)).resolves.toBe(true);
+    await expect(repository.delete(randomUUID(), createdTask.id)).resolves.toBe(
+      false
+    );
 
-    await expect(repository.findById(createdTask.id)).resolves.toBeNull();
+    await expect(repository.findById(ownerId, createdTask.id)).resolves.toEqual(
+      createdTask
+    );
 
-    await expect(repository.delete(createdTask.id)).resolves.toBe(false);
+    await expect(repository.delete(ownerId, createdTask.id)).resolves.toBe(
+      true
+    );
+
+    await expect(
+      repository.findById(ownerId, createdTask.id)
+    ).resolves.toBeNull();
+
+    await expect(repository.delete(ownerId, createdTask.id)).resolves.toBe(
+      false
+    );
   });
 });

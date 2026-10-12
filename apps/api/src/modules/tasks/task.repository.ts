@@ -1,6 +1,7 @@
 import type { Task, TaskStatus } from './task.model.ts';
 
 export type CreateTaskRecord = {
+  ownerId: string;
   title: string;
   description: string | null;
   status: TaskStatus;
@@ -25,9 +26,13 @@ export type TaskPage = {
 };
 
 export interface TaskRepository {
-  list(query: ListTasksQuery): Promise<TaskPage>;
-  findById(id: string): Promise<Task | null>;
+  list(ownerId: string, query: ListTasksQuery): Promise<TaskPage>;
+  findById(ownerId: string, id: string): Promise<Task | null>;
   create(input: CreateTaskRecord): Promise<Task>;
-  update(id: string, input: UpdateTaskRecord): Promise<Task | null>;
-  delete(id: string): Promise<boolean>;
+  update(
+    ownerId: string,
+    id: string,
+    input: UpdateTaskRecord
+  ): Promise<Task | null>;
+  delete(ownerId: string, id: string): Promise<boolean>;
 }

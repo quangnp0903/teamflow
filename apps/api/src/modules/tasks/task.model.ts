@@ -4,11 +4,10 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export type Task = Readonly<{
   id: string;
+  ownerId: string;
   title: string;
   description: string | null;
   status: TaskStatus;
   createdAt: string;
   updatedAt: string;
-}>
-
-
+}>;

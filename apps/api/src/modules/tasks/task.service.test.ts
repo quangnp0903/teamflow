@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryTaskRepository } from './in-memory-task.repository.ts';
 import { TaskService } from './task.service.ts';
 
+const OWNER_ID = '00000000-0000-4000-8000-000000000001';
+
 describe('TaskService', () => {
   it('applies server-owned defaults when creating a task', async () => {
     const repository = new InMemoryTaskRepository();
     const service = new TaskService(repository);
 
-    const task = await service.createTask({
+    const task = await service.createTask(OWNER_ID, {
       title: 'Write backend tests',
     });
 
@@ -27,12 +29,16 @@ describe('TaskService', () => {
     const repository = new InMemoryTaskRepository();
     const service = new TaskService(repository);
 
-    const createdTask = await service.createTask({
+    const createdTask = await service.createTask(OWNER_ID, {
       title: 'Learn test boundaries',
       description: 'Compare service and HTTP tests',
     });
 
-    const tasks = await service.listTasks({ page: 1, pageSize: 20 });
+    await service.createTask('00000000-0000-4000-8000-000000000002', {
+      title: 'Another user’s task',
+    });
+
+    const tasks = await service.listTasks(OWNER_ID, { page: 1, pageSize: 20 });
 
     expect(tasks).toEqual({ items: [createdTask], total: 1 });
   });
@@ -42,7 +48,7 @@ describe('TaskService', () => {
     const service = new TaskService(repository);
 
     await expect(
-      service.getTaskById('00000000-0000-4000-8000-000000000000')
+      service.getTaskById(OWNER_ID, '00000000-0000-4000-8000-000000000000')
     ).rejects.toMatchObject({
       name: 'AppError',
       statusCode: 404,
@@ -56,7 +62,7 @@ describe('TaskService', () => {
     const service = new TaskService(repository);
 
     await expect(
-      service.deleteTask('00000000-0000-4000-8000-000000000000')
+      service.deleteTask(OWNER_ID, '00000000-0000-4000-8000-000000000000')
     ).rejects.toMatchObject({
       name: 'AppError',
       statusCode: 404,

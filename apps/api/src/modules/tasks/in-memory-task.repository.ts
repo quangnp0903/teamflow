@@ -12,8 +12,8 @@ import type {
 export class InMemoryTaskRepository implements TaskRepository {
   private readonly tasks: Task[] = [];
 
-  async list(query: ListTasksQuery): Promise<TaskPage> {
-    let matchingTasks = [...this.tasks];
+  async list(ownerId: string, query: ListTasksQuery): Promise<TaskPage> {
+    let matchingTasks = this.tasks.filter((task) => task.ownerId === ownerId);
 
     if (query.status !== undefined) {
       matchingTasks = matchingTasks.filter(
@@ -70,8 +70,14 @@ export class InMemoryTaskRepository implements TaskRepository {
     return task;
   }
 
-  async update(id: string, input: UpdateTaskRecord): Promise<Task | null> {
-    const index = this.tasks.findIndex((task) => task.id === id);
+  async update(
+    ownerId: string,
+    id: string,
+    input: UpdateTaskRecord
+  ): Promise<Task | null> {
+    const index = this.tasks.findIndex(
+      (task) => task.id === id && task.ownerId === ownerId
+    );
     const currentTask = this.tasks[index];
 
     if (currentTask === undefined) {
@@ -89,12 +95,17 @@ export class InMemoryTaskRepository implements TaskRepository {
     return updateTask;
   }
 
-  async findById(id: string): Promise<Task | null> {
-    return this.tasks.find((task) => task.id === id) ?? null;
+  async findById(ownerId: string, id: string): Promise<Task | null> {
+    return (
+      this.tasks.find((task) => task.id === id && task.ownerId === ownerId) ??
+      null
+    );
   }
 
-  async delete(id: string): Promise<boolean> {
-    const index = this.tasks.findIndex((task) => task.id === id);
+  async delete(ownerId: string, id: string): Promise<boolean> {
+    const index = this.tasks.findIndex(
+      (task) => task.id === id && task.ownerId === ownerId
+    );
 
     if (index === -1) {
       return false;

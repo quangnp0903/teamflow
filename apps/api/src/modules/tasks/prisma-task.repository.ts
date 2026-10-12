@@ -15,10 +15,12 @@ import type {
 } from './task.repository.ts';
 
 function toDomainTask(task: PrismaTask): Task {
-  const { id, title, description, status, createdAt, updatedAt } = task;
+  const { id, ownerId, title, description, status, createdAt, updatedAt } =
+    task;
 
   return {
     id,
+    ownerId,
     title,
     description,
     status,
@@ -34,8 +36,8 @@ export class PrismaTaskRepository implements TaskRepository {
     this.client = client;
   }
 
-  async list(query: ListTasksQuery): Promise<TaskPage> {
-    const where: Prisma.TaskWhereInput = {};
+  async list(ownerId: string, query: ListTasksQuery): Promise<TaskPage> {
+    const where: Prisma.TaskWhereInput = { ownerId };
 
     if (query.status !== undefined) {
       where.status = query.status;
@@ -73,10 +75,11 @@ export class PrismaTaskRepository implements TaskRepository {
     return { items: tasks.map(toDomainTask), total };
   }
 
-  async findById(id: string): Promise<Task | null> {
+  async findById(ownerId: string, id: string): Promise<Task | null> {
     const task = await this.client.task.findUnique({
       where: {
         id,
+        ownerId,
       },
     });
 
@@ -89,10 +92,14 @@ export class PrismaTaskRepository implements TaskRepository {
     return toDomainTask(task);
   }
 
-  async update(id: string, input: UpdateTaskRecord): Promise<Task | null> {
+  async update(
+    ownerId: string,
+    id: string,
+    input: UpdateTaskRecord
+  ): Promise<Task | null> {
     try {
       const task = await this.client.task.update({
-        where: { id },
+        where: { id, ownerId },
         data: input,
       });
 
@@ -109,10 +116,11 @@ export class PrismaTaskRepository implements TaskRepository {
     }
   }
 
-  async delete(id: string): Promise<boolean> {
+  async delete(ownerId: string, id: string): Promise<boolean> {
     const result = await this.client.task.deleteMany({
       where: {
         id,
+        ownerId,
       },
     });
 

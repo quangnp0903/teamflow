@@ -35,6 +35,7 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   sessions     Session[]
+  ownedTasks   Task[] @relation("TaskOwner")
 
   @@map("users")
 }
@@ -46,6 +47,9 @@ model Task {
   status      TaskStatus @default(todo)
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
+  ownerId     String @map("owner_id") @db.Uuid
+  owner       User   @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
+  @@index([ownerId])
   @@map("tasks")
 }

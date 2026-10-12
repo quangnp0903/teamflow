@@ -15,20 +15,21 @@ export class TaskService {
     this.repository = repository;
   }
 
-  async listTasks(query: ListTasksQuery): Promise<TaskPage> {
-    return this.repository.list(query);
+  async listTasks(ownerId: string, query: ListTasksQuery): Promise<TaskPage> {
+    return this.repository.list(ownerId, query);
   }
 
-  async createTask(input: CreateTaskInput) {
+  async createTask(ownerId: string, input: CreateTaskInput) {
     return this.repository.create({
+      ownerId,
       title: input.title,
       description: input.description ?? null,
       status: 'todo',
     });
   }
 
-  async getTaskById(id: string) {
-    const task = await this.repository.findById(id);
+  async getTaskById(ownerId: string, id: string) {
+    const task = await this.repository.findById(ownerId, id);
 
     if (task === null) {
       throw new AppError(404, 'TASK_NOT_FOUND', 'Task not found');
@@ -37,7 +38,11 @@ export class TaskService {
     return task;
   }
 
-  async updateTask(id: string, input: UpdateTaskInput): Promise<Task> {
+  async updateTask(
+    ownerId: string,
+    id: string,
+    input: UpdateTaskInput
+  ): Promise<Task> {
     const changes: UpdateTaskRecord = {};
 
     if (input.title !== undefined) {
@@ -52,7 +57,7 @@ export class TaskService {
       changes.status = input.status;
     }
 
-    const task = await this.repository.update(id, changes);
+    const task = await this.repository.update(ownerId, id, changes);
 
     if (task === null) {
       throw new AppError(404, 'TASK_NOT_FOUND', 'Task not found');
@@ -61,8 +66,8 @@ export class TaskService {
     return task;
   }
 
-  async deleteTask(id: string): Promise<void> {
-    const deleted = await this.repository.delete(id);
+  async deleteTask(ownerId: string, id: string): Promise<void> {
+    const deleted = await this.repository.delete(ownerId, id);
 
     if (!deleted) {
       throw new AppError(404, 'TASK_NOT_FOUND', 'Task not found');
