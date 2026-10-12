@@ -54,4 +54,30 @@ describe('LoginForm', () => {
 
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
   });
+
+  it('shows field errors without submitting invalid credentials', async () => {
+    const user = userEvent.setup();
+    const onLogin = vi.fn().mockResolvedValue(undefined);
+
+    render(<LoginForm onLogin={onLogin} />);
+
+    const emailInput = screen.getByRole('textbox', { name: 'Email' });
+    const passwordInput = screen.getByLabelText('Password');
+
+    await user.type(emailInput, 'not-an-email');
+
+    // Leave the password empty.
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByText('Enter a valid email address')
+    ).toBeInTheDocument();
+
+    expect(await screen.findByText('Enter your password')).toBeInTheDocument();
+
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(passwordInput).toHaveAttribute('aria-invalid', 'true');
+
+    expect(onLogin).not.toHaveBeenCalled();
+  });
 });

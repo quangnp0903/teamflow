@@ -1,5 +1,11 @@
-import { type FC, type SubmitEvent, useState } from 'react';
+import { type FC } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
+import {
+  registerFormSchema,
+  type RegisterFormValues,
+} from './auth.form-schema';
 import type { RegisterInput } from './auth.types';
 import styles from './AuthForm.module.css';
 
@@ -8,41 +14,29 @@ type RegisterFormProps = Readonly<{
 }>;
 
 const RegisterForm: FC<RegisterFormProps> = ({ onRegister }) => {
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerFormSchema),
+    defaultValues: {
+      displayName: '',
+      email: '',
+      password: '',
+    },
+  });
 
-  const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (isSubmitting) {
-      return;
-    }
-
-    const normalizedDisplayName = displayName.trim();
-
-    if (normalizedDisplayName.length === 0) {
-      setErrorMessage('Please enter a display name');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
+  const onSubmit = async (input: RegisterFormValues) => {
     try {
-      await onRegister({
-        displayName: normalizedDisplayName,
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      await onRegister(input);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Account creation failed'
-      );
-    } finally {
-      setIsSubmitting(false);
+      setError('root.server', {
+        type: 'server',
+        message:
+          error instanceof Error ? error.message : 'Account creation failed',
+      });
     }
   };
 
@@ -53,51 +47,77 @@ const RegisterForm: FC<RegisterFormProps> = ({ onRegister }) => {
       <form
         className={styles.form}
         aria-busy={isSubmitting}
-        onSubmit={(event) => void handleSubmit(event)}
+        noValidate
+        onSubmit={(event) => void handleSubmit(onSubmit)(event)}
       >
         <label className={styles.field}>
           <span>Display name</span>
 
           <input
+            {...register('displayName')}
             type="text"
-            name="displayName"
             required
             maxLength={80}
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            disabled={isSubmitting}
+            readOnly={isSubmitting}
+            aria-invalid={Boolean(errors.displayName)}
+            aria-describedby={
+              errors.displayName ? 'register-displayName-error' : undefined
+            }
           />
         </label>
+
+        {errors.displayName && (
+          <p
+            id="register-displayName-error"
+            className={styles.errorMessage}
+            role="alert"
+          >
+            {errors.displayName.message}
+          </p>
+        )}
 
         <label className={styles.field}>
           <span>Email</span>
 
           <input
-            type="email"
-            name="email"
+            {...register('email')}
             autoComplete="username"
+            type="email"
             required
             maxLength={254}
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={isSubmitting}
+            readOnly={isSubmitting}
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? 'register-email-error' : undefined}
           />
         </label>
+
+        {errors.email && (
+          <p
+            id="register-email-error"
+            className={styles.errorMessage}
+            role="alert"
+          >
+            {errors.email.message}
+          </p>
+        )}
 
         <label className={styles.field}>
           <span>Password</span>
 
           <input
+            {...register('password')}
             type="password"
-            name="password"
             autoComplete="new-password"
             required
             minLength={15}
             maxLength={128}
-            aria-describedby="register-password-hint"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={isSubmitting}
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={
+              errors.password
+                ? 'register-password-hint register-password-error'
+                : 'register-password-hint'
+            }
+            readOnly={isSubmitting}
           />
 
           <span id="register-password-hint" className={styles.hint}>
@@ -105,9 +125,19 @@ const RegisterForm: FC<RegisterFormProps> = ({ onRegister }) => {
           </span>
         </label>
 
-        {errorMessage !== null && (
+        {errors.password && (
+          <p
+            id="register-password-error"
+            className={styles.errorMessage}
+            role="alert"
+          >
+            {errors.password.message}
+          </p>
+        )}
+
+        {errors.root?.server && (
           <p className={styles.errorMessage} role="alert">
-            {errorMessage}
+            {errors.root.server.message}
           </p>
         )}
 

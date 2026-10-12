@@ -1,5 +1,8 @@
-import { type FC, type SubmitEvent, useState } from 'react';
+import { type FC } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
+import { loginFormSchema, type LoginFormValues } from './auth.form-schema';
 import type { LoginInput } from './auth.types';
 import styles from './AuthForm.module.css';
 
@@ -8,32 +11,27 @@ type LoginFormProps = Readonly<{
 }>;
 
 const LoginForm: FC<LoginFormProps> = ({ onLogin }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginFormSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
 
-  const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (isSubmitting) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
+  const onSubmit = async (input: LoginFormValues) => {
     try {
-      await onLogin({
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      await onLogin(input);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Sign in failed'
-      );
-    } finally {
-      setIsSubmitting(false);
+      setError('root.server', {
+        type: 'server',
+        message: error instanceof Error ? error.message : 'Sign in failed',
+      });
     }
   };
 
@@ -44,41 +42,64 @@ const LoginForm: FC<LoginFormProps> = ({ onLogin }) => {
       <form
         className={styles.form}
         aria-busy={isSubmitting}
-        onSubmit={(event) => void handleSubmit(event)}
+        noValidate
+        onSubmit={(event) => void handleSubmit(onSubmit)(event)}
       >
         <label className={styles.field}>
           <span>Email</span>
 
           <input
+            {...register('email')}
             type="email"
-            name="email"
             autoComplete="username"
             required
             maxLength={254}
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={isSubmitting}
+            readOnly={isSubmitting}
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? 'login-email-error' : undefined}
           />
         </label>
+
+        {errors.email && (
+          <p
+            id="login-email-error"
+            className={styles.errorMessage}
+            role="alert"
+          >
+            {errors.email.message}
+          </p>
+        )}
 
         <label className={styles.field}>
           <span>Password</span>
 
           <input
+            {...register('password')}
             type="password"
-            name="password"
             autoComplete="current-password"
             required
             maxLength={128}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={isSubmitting}
+            readOnly={isSubmitting}
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={
+              errors.password ? 'login-password-error' : undefined
+            }
           />
         </label>
 
-        {errorMessage !== null && (
+        {errors.password && (
+          <p
+            id="login-password-error"
+            className={styles.errorMessage}
+            role="alert"
+          >
+            {errors.password.message}
+          </p>
+        )}
+
+        {errors.root?.server && (
           <p className={styles.errorMessage} role="alert">
-            {errorMessage}
+            {errors.root.server.message}
           </p>
         )}
 
