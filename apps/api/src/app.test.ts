@@ -1036,4 +1036,85 @@ describe('workspace API', () => {
 
     expect(createWithOwner).not.toHaveBeenCalled();
   });
+
+  it('rejects anonymous workspace listing', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app).get('/api/workspaces');
+
+    expect(response.status).toBe(401);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'UNAUTHENTICATED',
+      },
+    });
+  });
+
+  it('returns an empty list for a user without memberships', async () => {
+    const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
+
+    const response = await agent.get('/api/workspaces').expect(200);
+
+    expect(response.body).toEqual({
+      data: [],
+    });
+  });
+
+  it('lists only workspaces belonging to the authenticated user', async () => {
+    const app = createTestApp();
+
+    const alice = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'workspace-alice@example.com'
+    );
+
+    const bob = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'workspace-bob@example.com'
+    );
+
+    const aliceWorkspace = await alice
+      .post('/api/workspaces')
+      .send({ name: 'Alice Team' })
+      .expect(201);
+
+    const bobWorkspace = await bob
+      .post('/api/workspaces')
+      .send({ name: 'Bob Team' })
+      .expect(201);
+
+    const aliceList = await alice.get('/api/workspaces').expect(200);
+    const bobList = await bob.get('/api/workspaces').expect(200);
+
+    expect(aliceList.body).toEqual({
+      data: [{ ...aliceWorkspace.body.data, role: 'owner' }],
+    });
+
+    expect(bobList.body).toEqual({
+      data: [{ ...bobWorkspace.body.data, role: 'owner' }],
+    });
+  });
+
+  it('rejects a client-supplied user filter before calling storage', async () => {
+    const repository = new InMemoryWorkspaceRepository();
+    const listForUser = vi.spyOn(repository, 'listForUser');
+    const app = createTestApp(repository);
+    const agent = await authenticatedBrowserRequest(app);
+
+    const response = await agent.get('/api/workspaces').query({
+      userId: '00000000-0000-4000-8000-000000000000',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+      },
+    });
+
+    expect(listForUser).not.toHaveBeenCalled();
+  });
 });

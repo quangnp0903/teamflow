@@ -3,7 +3,7 @@ import type {
   Workspace as PrismaWorkspace,
 } from '../../generated/prisma/client.ts';
 
-import type { Workspace } from './workspace.model.ts';
+import type { Workspace, WorkspaceWithRole } from './workspace.model.ts';
 import type {
   CreateWorkspaceRecord,
   WorkspaceRepository,
@@ -43,5 +43,32 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     });
 
     return toWorkspace(workspace);
+  }
+
+  async listForUser(userId: string): Promise<readonly WorkspaceWithRole[]> {
+    const memberships = await this.client.workspaceMember.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        role: true,
+        workspace: true,
+      },
+      orderBy: [
+        {
+          workspace: {
+            createdAt: 'desc',
+          },
+        },
+        {
+          workspaceId: 'desc',
+        },
+      ],
+    });
+
+    return memberships.map(({ workspace, role }) => ({
+      ...toWorkspace(workspace),
+      role,
+    }));
   }
 }

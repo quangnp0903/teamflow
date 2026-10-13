@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Workspace, WorkspaceMember } from './workspace.model.ts';
+import type {
+  Workspace,
+  WorkspaceMember,
+  WorkspaceWithRole,
+} from './workspace.model.ts';
 import type {
   CreateWorkspaceRecord,
   WorkspaceRepository,
@@ -33,5 +37,38 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     this.members.push(member);
 
     return workspace;
+  }
+
+  async listForUser(userId: string): Promise<readonly WorkspaceWithRole[]> {
+    const membershipsByWorkspaceId = new Map<string, WorkspaceMember>();
+
+    for (const member of this.members) {
+      if (member.userId === userId) {
+        membershipsByWorkspaceId.set(member.workspaceId, member);
+      }
+    }
+
+    const result: WorkspaceWithRole[] = [];
+
+    for (const workspace of this.workspaces) {
+      const membership = membershipsByWorkspaceId.get(workspace.id);
+
+      if (membership !== undefined) {
+        result.push({
+          ...workspace,
+          role: membership.role,
+        });
+      }
+    }
+
+    return result.sort((first, second) => {
+      const dateComparison = second.createdAt.localeCompare(first.createdAt);
+
+      if (dateComparison !== 0) {
+        return dateComparison;
+      }
+
+      return second.id.localeCompare(first.id);
+    });
   }
 }

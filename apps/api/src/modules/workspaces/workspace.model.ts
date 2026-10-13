@@ -17,3 +17,8 @@ export type WorkspaceMember = Readonly<{
   createdAt: string;
   updatedAt: string;
 }>;
+
+export type WorkspaceWithRole = Workspace &
+  Readonly<{
+    role: WorkspaceRole;
+  }>;

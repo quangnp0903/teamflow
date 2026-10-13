@@ -5,6 +5,7 @@ import type { WorkspaceController } from './workspace.controller.ts';
 export function createWorkspaceRouter(controller: WorkspaceController) {
   const router = Router();
 
+  router.get('/', controller.list);
   router.post('/', controller.create);
 
   return router;

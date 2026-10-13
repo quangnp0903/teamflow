@@ -1,4 +1,4 @@
-import type { Workspace } from './workspace.model.ts';
+import type { Workspace, WorkspaceWithRole } from './workspace.model.ts';
 import type { WorkspaceRepository } from './workspace.repository.ts';
 import type { CreateWorkspaceInput } from './workspace.schema.ts';
 
@@ -17,5 +17,9 @@ export class WorkspaceService {
       name: input.name,
       ownerId,
     });
+  }
+
+  async listWorkspaces(userId: string): Promise<readonly WorkspaceWithRole[]> {
+    return this.repository.listForUser(userId);
   }
 }

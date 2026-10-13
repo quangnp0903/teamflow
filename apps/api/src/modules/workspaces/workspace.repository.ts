@@ -1,4 +1,4 @@
-import type { Workspace } from './workspace.model.ts';
+import type { Workspace, WorkspaceWithRole } from './workspace.model.ts';
 
 export type CreateWorkspaceRecord = Readonly<{
   name: string;
@@ -10,4 +10,6 @@ export interface WorkspaceRepository {
    * Creates a workspace and its owner's membership atomically.
    */
   createWithOwner(input: CreateWorkspaceRecord): Promise<Workspace>;
+
+  listForUser(userId: string): Promise<readonly WorkspaceWithRole[]>;
 }

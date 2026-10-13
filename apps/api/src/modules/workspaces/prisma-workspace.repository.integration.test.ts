@@ -38,18 +38,34 @@ const runId = randomUUID();
 const ownerId = randomUUID();
 const successName = `workspace-success-${runId}`;
 const rollbackName = `workspace-rollback-${runId}`;
+const listingUserId = randomUUID();
+const otherOwnerId = randomUUID();
+
+const ownedListName = `workspace-list-owned-${runId}`;
+const sharedListName = `workspace-list-shared-${runId}`;
+const hiddenListName = `workspace-list-hidden-${runId}`;
+
+const fixtureUserIds = [ownerId, listingUserId, otherOwnerId];
+
+const fixtureWorkspaceNames = [
+  successName,
+  rollbackName,
+  ownedListName,
+  sharedListName,
+  hiddenListName,
+];
 
 describe('PrismaWorkspaceRepository', () => {
   beforeAll(async () => {
     await prisma.$connect();
 
-    await prisma.user.create({
-      data: {
-        id: ownerId,
-        email: `workspace-owner-${ownerId}@example.com`,
-        displayName: 'Workspace owner',
+    await prisma.user.createMany({
+      data: fixtureUserIds.map((id) => ({
+        id,
+        email: `workspace-fixture-${id}@example.com`,
+        displayName: 'Workspace fixture user',
         passwordHash: 'unused-in-repository-test',
-      },
+      })),
     });
   });
 
@@ -58,14 +74,16 @@ describe('PrismaWorkspaceRepository', () => {
       await prisma.workspace.deleteMany({
         where: {
           name: {
-            in: [successName, rollbackName],
+            in: fixtureWorkspaceNames,
           },
         },
       });
 
       await prisma.user.deleteMany({
         where: {
-          id: ownerId,
+          id: {
+            in: fixtureUserIds,
+          },
         },
       });
     } finally {
@@ -131,5 +149,71 @@ describe('PrismaWorkspaceRepository', () => {
         },
       })
     ).resolves.toBe(0);
+  });
+
+  it('lists owned and shared workspaces with requester-specific roles', async () => {
+    await expect(repository.listForUser(listingUserId)).resolves.toEqual([]);
+
+    const owned = await repository.createWithOwner({
+      name: ownedListName,
+      ownerId: listingUserId,
+    });
+
+    const shared = await repository.createWithOwner({
+      name: sharedListName,
+      ownerId: otherOwnerId,
+    });
+
+    const hidden = await repository.createWithOwner({
+      name: hiddenListName,
+      ownerId: otherOwnerId,
+    });
+
+    const sharedMembership = await prisma.workspaceMember.create({
+      data: {
+        workspaceId: shared.id,
+        userId: listingUserId,
+        role: 'admin',
+      },
+    });
+
+    const userWorkspaces = await repository.listForUser(listingUserId);
+
+    expect(userWorkspaces).toHaveLength(2);
+    expect(userWorkspaces).toEqual(
+      expect.arrayContaining([
+        { ...owned, role: 'owner' },
+        { ...shared, role: 'admin' },
+      ])
+    );
+
+    const otherWorkspaces = await repository.listForUser(otherOwnerId);
+
+    expect(otherWorkspaces).toHaveLength(2);
+    expect(otherWorkspaces).toEqual(
+      expect.arrayContaining([
+        { ...shared, role: 'owner' },
+        { ...hidden, role: 'owner' },
+      ])
+    );
+
+    await prisma.workspaceMember.update({
+      where: {
+        id: sharedMembership.id,
+      },
+      data: {
+        role: 'member',
+      },
+    });
+
+    const afterRoleChange = await repository.listForUser(listingUserId);
+
+    expect(afterRoleChange).toHaveLength(2);
+    expect(afterRoleChange).toEqual(
+      expect.arrayContaining([
+        { ...owned, role: 'owner' },
+        { ...shared, role: 'member' },
+      ])
+    );
   });
 });
