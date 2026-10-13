@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { InMemoryTaskRepository } from './modules/tasks/in-memory-task.repository.ts';
 import { FakePasswordHasher } from './modules/auth/fake-password-hasher.ts';
@@ -7,6 +7,8 @@ import { InMemoryUserRepository } from './modules/users/in-memory-user.repositor
 import { createApp } from './app.ts';
 import { FakeSessionTokenManager } from './modules/auth/fake-session-token-manager.ts';
 import { InMemorySessionRepository } from './modules/sessions/in-memory-session.repository.ts';
+import { InMemoryWorkspaceRepository } from './modules/workspaces/in-memory-workspace.repository.ts';
+import type { WorkspaceRepository } from './modules/workspaces/workspace.repository.ts';
 
 const TEST_ORIGINS = [
   'http://localhost:5173',
@@ -15,9 +17,12 @@ const TEST_ORIGINS = [
 
 const TEST_ORIGIN = TEST_ORIGINS[0];
 
-function createTestApp() {
+function createTestApp(
+  workspaceRepository: WorkspaceRepository = new InMemoryWorkspaceRepository()
+) {
   return createApp({
     taskRepository: new InMemoryTaskRepository(),
+    workspaceRepository,
     userRepository: new InMemoryUserRepository(),
     sessionRepository: new InMemorySessionRepository(),
     passwordHasher: new FakePasswordHasher(),
@@ -945,5 +950,90 @@ describe('API CORS', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
+describe('workspace API', () => {
+  it('rejects anonymous workspace creation', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app)
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'UNAUTHENTICATED',
+      },
+    });
+  });
+
+  it('creates a normalized workspace for the authenticated user', async () => {
+    const repository = new InMemoryWorkspaceRepository();
+    const createWithOwner = vi.spyOn(repository, 'createWithOwner');
+    const app = createTestApp(repository);
+    const agent = await authenticatedBrowserRequest(app);
+
+    const meResponse = await agent.get('/api/auth/me').expect(200);
+
+    const response = await agent
+      .post('/api/workspaces')
+      .send({ name: '  Product Team  ' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({
+      id: expect.any(String),
+      name: 'Product Team',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+
+    expect(createWithOwner).toHaveBeenCalledTimes(1);
+    expect(createWithOwner).toHaveBeenCalledWith({
+      name: 'Product Team',
+      ownerId: meResponse.body.data.id,
+    });
+  });
+
+  it.each([
+    {
+      caseName: 'a blank name',
+      input: { name: '   ' },
+    },
+    {
+      caseName: 'an oversized name',
+      input: { name: 'x'.repeat(121) },
+    },
+    {
+      caseName: 'a client-supplied owner',
+      input: {
+        name: 'Product Team',
+        ownerId: '00000000-0000-4000-8000-000000000000',
+      },
+    },
+    {
+      caseName: 'a client-supplied role',
+      input: {
+        name: 'Product Team',
+        role: 'admin',
+      },
+    },
+  ])('rejects $caseName without calling storage', async ({ input }) => {
+    const repository = new InMemoryWorkspaceRepository();
+    const createWithOwner = vi.spyOn(repository, 'createWithOwner');
+    const app = createTestApp(repository);
+    const agent = await authenticatedBrowserRequest(app);
+
+    const response = await agent.post('/api/workspaces').send(input);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+      },
+    });
+
+    expect(createWithOwner).not.toHaveBeenCalled();
   });
 });

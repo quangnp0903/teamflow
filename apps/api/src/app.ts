@@ -17,6 +17,10 @@ import type { SessionRepository } from './modules/sessions/session.repository.ts
 import type { SessionTokenManager } from './modules/auth/session-token-manager.ts';
 import { requireTrustedOrigin } from './middleware/require-trusted-origin.ts';
 import { requireAuth } from './middleware/require-auth.ts';
+import type { WorkspaceRepository } from './modules/workspaces/workspace.repository.ts';
+import { WorkspaceService } from './modules/workspaces/workspace.service.ts';
+import { WorkspaceController } from './modules/workspaces/workspace.controller.ts';
+import { createWorkspaceRouter } from './modules/workspaces/workspace.routes.ts';
 
 type AppDependencies = {
   taskRepository: TaskRepository;
@@ -26,6 +30,7 @@ type AppDependencies = {
   sessionTokenManager: SessionTokenManager;
   secureSessionCookie: boolean;
   trustedOrigins: readonly string[];
+  workspaceRepository: WorkspaceRepository;
 };
 
 export function createApp({
@@ -36,6 +41,7 @@ export function createApp({
   sessionTokenManager,
   secureSessionCookie,
   trustedOrigins,
+  workspaceRepository,
 }: AppDependencies) {
   const app = express();
 
@@ -69,6 +75,10 @@ export function createApp({
   const authController = new AuthController(authService, {
     secureSessionCookie,
   });
+
+  const workspaceService = new WorkspaceService(workspaceRepository);
+  const workspaceController = new WorkspaceController(workspaceService);
+
   const authenticate = requireAuth(authService);
 
   app.get('/api/health', (_request, response) => {
@@ -79,6 +89,11 @@ export function createApp({
 
   app.use('/api/auth', createAuthRouter(authController, authenticate));
   app.use('/api/tasks', authenticate, createTaskRouter(taskController));
+  app.use(
+    '/api/workspaces',
+    authenticate,
+    createWorkspaceRouter(workspaceController)
+  );
 
   app.use((_request, response) => {
     response.status(404).json({
