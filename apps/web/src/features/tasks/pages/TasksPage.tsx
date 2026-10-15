@@ -1,10 +1,10 @@
-import CreateTaskForm from './CreateTaskForm';
-import TaskItem from './TaskItem';
-import TaskFilters from './TaskFilters';
-import TaskPagination from './TaskPagination';
-import useTasks from './useTasks';
-import useAuth from '../auth/useAuth';
-import LogoutButton from '../auth/LogoutButton';
+import CreateTaskForm from '../components/CreateTaskForm/CreateTaskForm';
+import TaskItem from '../components/TaskItem/TaskItem';
+import TaskFilters from '../components/TaskFilters/TaskFilters';
+import TaskPagination from '../components/TaskPagination/TaskPagination';
+import useTasks from '../hooks/useTasks';
+import useAuth from '../../auth/useAuth';
+import LogoutButton from '../../auth/LogoutButton';
 
 function TasksPage() {
   const { logout } = useAuth();

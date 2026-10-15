@@ -1,6 +1,6 @@
 import { type SubmitEvent, useState } from 'react';
 
-import type { CreateTaskInput } from './task.types';
+import type { CreateTaskInput } from '../../task.types';
 import styles from './CreateTaskForm.module.css';
 
 type CreateTaskFormProps = Readonly<{

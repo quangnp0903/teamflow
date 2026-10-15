@@ -6,9 +6,9 @@ import {
   type TaskDetailsInput,
   type TaskStatus,
   type UpdateTaskInput,
-} from './task.types';
+} from '../../task.types';
 import styles from './TaskItem.module.css';
-import EditTaskForm from './EditTaskForm';
+import EditTaskForm from '../EditTaskForm/EditTaskForm';
 
 const TASK_STATUS_LABELS = {
   todo: 'Todo',

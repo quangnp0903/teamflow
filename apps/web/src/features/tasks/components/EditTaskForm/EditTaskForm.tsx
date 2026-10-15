@@ -1,6 +1,6 @@
 import { useState, type SubmitEvent } from 'react';
 
-import type { Task, TaskDetailsInput } from './task.types';
+import type { Task, TaskDetailsInput } from '../../task.types';
 import styles from './EditTaskForm.module.css';
 
 type EditTaskFormProps = Readonly<{

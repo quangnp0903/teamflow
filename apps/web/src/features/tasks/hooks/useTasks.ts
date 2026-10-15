@@ -5,14 +5,14 @@ import {
   deleteTask as deleteTaskRequest,
   listTasks,
   updateTask as updateTaskRequest,
-} from './task.api';
+} from '../api/task.api';
 import type {
   CreateTaskInput,
   ListTasksParams,
   Task,
   TaskPageMeta,
   UpdateTaskInput,
-} from './task.types';
+} from '../task.types';
 
 const PAGE_SIZE = 5;
 

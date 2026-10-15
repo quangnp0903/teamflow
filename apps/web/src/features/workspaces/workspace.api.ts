@@ -1,4 +1,4 @@
-import { requestJson } from '../../lib/http';
+import { requestJson } from 'src/lib/http';
 
 import type {
   CreateWorkspaceInput,

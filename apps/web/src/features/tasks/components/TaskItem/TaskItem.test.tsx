@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import TaskItem from './TaskItem';
-import type { Task } from './task.types';
+import type { Task } from '../../task.types';
 
 afterEach(() => {
   vi.restoreAllMocks();

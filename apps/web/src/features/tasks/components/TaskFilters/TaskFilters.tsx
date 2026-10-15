@@ -4,7 +4,7 @@ import {
   TASK_STATUSES,
   type ListTasksParams,
   type TaskStatus,
-} from './task.types';
+} from '../../task.types';
 import styles from './TaskFilters.module.css';
 
 type TaskFiltersProps = Readonly<{

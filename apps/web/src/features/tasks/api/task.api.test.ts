@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError } from '../../lib/http';
+import { ApiError } from 'src/lib/http';
 
 import { listTasks, createTask, updateTask, deleteTask } from './task.api.ts';
-import type { Task, UpdateTaskInput } from './task.types.ts';
+import type { Task, UpdateTaskInput } from '../task.types.ts';
 
 afterEach(() => {
   vi.unstubAllGlobals();

@@ -5,9 +5,9 @@ import type {
   Task,
   TaskResponse,
   UpdateTaskInput,
-} from './task.types';
+} from '../task.types';
 
-import { request, requestJson } from '../../lib/http';
+import { request, requestJson } from 'src/lib/http';
 
 export function listTasks(params: ListTasksParams = {}): Promise<TaskPage> {
   const query = new URLSearchParams();

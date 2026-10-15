@@ -1,4 +1,4 @@
-import { ApiError, request, requestJson } from '../../lib/http';
+import { ApiError, request, requestJson } from 'src/lib/http';
 
 import type {
   AuthUser,
