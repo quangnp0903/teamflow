@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react';
 import {
   listWorkspaces,
   createWorkspace as createWorkspaceRequest,
-} from './workspace.api';
+} from '../api/workspace.api';
 import type {
   WorkspaceWithRole,
   CreateWorkspaceInput,
-} from './workspace.types';
+} from '../workspace.types';
 
 type UseWorkspacesResult = Readonly<{
   workspaces: readonly WorkspaceWithRole[];

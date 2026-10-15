@@ -2,13 +2,13 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AuthContext, type AuthContextValue } from '../auth/auth.context';
+import { AuthContext, type AuthContextValue } from '../../auth/auth.context';
 
-import { createWorkspace, listWorkspaces } from './workspace.api';
-import type { Workspace, WorkspaceWithRole } from './workspace.types';
+import { createWorkspace, listWorkspaces } from '../api/workspace.api';
+import type { Workspace, WorkspaceWithRole } from '../workspace.types';
 import WorkspacesPage from './WorkspacesPage';
 
-vi.mock('./workspace.api', () => ({
+vi.mock('../api/workspace.api', () => ({
   createWorkspace: vi.fn(),
   listWorkspaces: vi.fn(),
 }));

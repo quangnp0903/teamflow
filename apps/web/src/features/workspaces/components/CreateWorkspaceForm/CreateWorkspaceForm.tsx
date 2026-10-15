@@ -5,8 +5,8 @@ import { useForm } from 'react-hook-form';
 import {
   createWorkspaceFormSchema,
   type CreateWorkspaceFormValues,
-} from './workspace.form-schema';
-import type { CreateWorkspaceInput } from './workspace.types';
+} from '../../workspace.form-schema';
+import type { CreateWorkspaceInput } from '../../workspace.types';
 import styles from './CreateWorkspaceForm.module.css';
 
 type CreateWorkspaceFormProps = Readonly<{

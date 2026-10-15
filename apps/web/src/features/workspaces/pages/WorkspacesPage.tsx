@@ -1,9 +1,9 @@
-import LogoutButton from '../auth/LogoutButton';
-import useAuth from '../auth/useAuth';
+import LogoutButton from '../../auth/LogoutButton';
+import useAuth from '../../auth/useAuth';
 
-import CreateWorkspaceForm from './CreateWorkspaceForm';
-import useWorkspaces from './useWorkspaces';
-import type { WorkspaceRole } from './workspace.types';
+import CreateWorkspaceForm from '../components/CreateWorkspaceForm/CreateWorkspaceForm';
+import useWorkspaces from '../hooks/useWorkspaces';
+import type { WorkspaceRole } from '../workspace.types';
 import styles from './WorkspacesPage.module.css';
 
 const WORKSPACE_ROLE_LABELS = {

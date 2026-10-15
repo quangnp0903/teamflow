@@ -6,7 +6,7 @@ import type {
   WorkspaceListResponse,
   WorkspaceResponse,
   WorkspaceWithRole,
-} from './workspace.types';
+} from '../workspace.types';
 
 export async function listWorkspaces(
   signal?: AbortSignal
