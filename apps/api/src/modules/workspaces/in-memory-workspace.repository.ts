@@ -71,4 +71,30 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       return second.id.localeCompare(first.id);
     });
   }
+
+  async findForUser(
+    userId: string,
+    workspaceId: string
+  ): Promise<WorkspaceWithRole | null> {
+    const membership = this.members.find(
+      (member) => member.userId === userId && member.workspaceId === workspaceId
+    );
+
+    if (membership === undefined) {
+      return null;
+    }
+
+    const workspace = this.workspaces.find(
+      (workspace) => workspace.id === workspaceId
+    );
+
+    if (workspace === undefined) {
+      return null;
+    }
+
+    return {
+      ...workspace,
+      role: membership.role,
+    };
+  }
 }

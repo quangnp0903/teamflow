@@ -71,4 +71,31 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       role,
     }));
   }
+
+  async findForUser(
+    userId: string,
+    workspaceId: string
+  ): Promise<WorkspaceWithRole | null> {
+    const membership = await this.client.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId,
+        },
+      },
+      select: {
+        role: true,
+        workspace: true,
+      },
+    });
+
+    if (membership === null) {
+      return null;
+    }
+
+    return {
+      ...toWorkspace(membership.workspace),
+      role: membership.role,
+    };
+  }
 }

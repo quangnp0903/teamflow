@@ -40,12 +40,14 @@ const successName = `workspace-success-${runId}`;
 const rollbackName = `workspace-rollback-${runId}`;
 const listingUserId = randomUUID();
 const otherOwnerId = randomUUID();
+const detailsMemberId = randomUUID();
+const detailsName = `workspace-details-${runId}`;
 
 const ownedListName = `workspace-list-owned-${runId}`;
 const sharedListName = `workspace-list-shared-${runId}`;
 const hiddenListName = `workspace-list-hidden-${runId}`;
 
-const fixtureUserIds = [ownerId, listingUserId, otherOwnerId];
+const fixtureUserIds = [ownerId, listingUserId, otherOwnerId, detailsMemberId];
 
 const fixtureWorkspaceNames = [
   successName,
@@ -53,6 +55,7 @@ const fixtureWorkspaceNames = [
   ownedListName,
   sharedListName,
   hiddenListName,
+  detailsName,
 ];
 
 describe('PrismaWorkspaceRepository', () => {
@@ -215,5 +218,68 @@ describe('PrismaWorkspaceRepository', () => {
         { ...shared, role: 'member' },
       ])
     );
+  });
+
+  it('looks up workspaces by membership and reflects access changes', async () => {
+    const workspace = await repository.createWithOwner({
+      name: detailsName,
+      ownerId,
+    });
+
+    const membership = await prisma.workspaceMember.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: detailsMemberId,
+        role: 'member',
+      },
+    });
+
+    await expect(
+      repository.findForUser(ownerId, workspace.id)
+    ).resolves.toEqual({
+      ...workspace,
+      role: 'owner',
+    });
+
+    await expect(
+      repository.findForUser(detailsMemberId, workspace.id)
+    ).resolves.toEqual({
+      ...workspace,
+      role: 'member',
+    });
+
+    await expect(
+      repository.findForUser(otherOwnerId, workspace.id)
+    ).resolves.toBeNull();
+
+    await expect(
+      repository.findForUser(ownerId, randomUUID())
+    ).resolves.toBeNull();
+
+    await prisma.workspaceMember.update({
+      where: {
+        id: membership.id,
+      },
+      data: {
+        role: 'admin',
+      },
+    });
+
+    await expect(
+      repository.findForUser(detailsMemberId, workspace.id)
+    ).resolves.toEqual({
+      ...workspace,
+      role: 'admin',
+    });
+
+    await prisma.workspaceMember.delete({
+      where: {
+        id: membership.id,
+      },
+    });
+
+    await expect(
+      repository.findForUser(detailsMemberId, workspace.id)
+    ).resolves.toBeNull();
   });
 });

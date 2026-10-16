@@ -12,4 +12,9 @@ export interface WorkspaceRepository {
   createWithOwner(input: CreateWorkspaceRecord): Promise<Workspace>;
 
   listForUser(userId: string): Promise<readonly WorkspaceWithRole[]>;
+
+  findForUser(
+    userId: string,
+    workspaceId: string
+  ): Promise<WorkspaceWithRole | null>;
 }

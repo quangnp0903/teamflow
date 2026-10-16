@@ -1118,3 +1118,86 @@ describe('workspace API', () => {
     expect(listForUser).not.toHaveBeenCalled();
   });
 });
+
+describe('workspace details API', () => {
+  it('returns a workspace with the requesting member’s role', async () => {
+    const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
+
+    const created = await agent
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const response = await agent
+      .get(`/api/workspaces/${created.body.data.id}`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      data: {
+        ...created.body.data,
+        role: 'owner',
+      },
+    });
+  });
+
+  it('returns the same not-found response for inaccessible and missing workspaces', async () => {
+    const app = createTestApp();
+
+    const alice = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'workspace-alice@example.com'
+    );
+
+    const bob = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'workspace-bob@example.com'
+    );
+
+    const created = await alice
+      .post('/api/workspaces')
+      .send({ name: 'Alice Team' })
+      .expect(201);
+
+    const inaccessible = await bob
+      .get(`/api/workspaces/${created.body.data.id}`)
+      .expect(404);
+
+    const missing = await bob
+      .get('/api/workspaces/00000000-0000-4000-8000-000000000000')
+      .expect(404);
+
+    expect(inaccessible.body).toEqual({
+      error: {
+        code: 'WORKSPACE_NOT_FOUND',
+        message: 'Workspace not found',
+      },
+    });
+
+    expect(missing.body).toEqual(inaccessible.body);
+  });
+
+  it('rejects anonymous workspace reads', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app)
+      .get('/api/workspaces/00000000-0000-4000-8000-000000000000')
+      .expect(401);
+
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+  });
+
+  it('rejects malformed IDs before the workspace lookup', async () => {
+    const repository = new InMemoryWorkspaceRepository();
+    const findForUser = vi.spyOn(repository, 'findForUser');
+    const app = createTestApp(repository);
+    const agent = await authenticatedBrowserRequest(app);
+
+    const response = await agent.get('/api/workspaces/not-a-uuid').expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(findForUser).not.toHaveBeenCalled();
+  });
+});

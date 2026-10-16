@@ -7,3 +7,7 @@ export const createWorkspaceSchema = z.strictObject({
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 
 export const listWorkspacesQuerySchema = z.strictObject({});
+
+export const workspaceParamsSchema = z.strictObject({
+  workspaceId: z.uuid(),
+});
