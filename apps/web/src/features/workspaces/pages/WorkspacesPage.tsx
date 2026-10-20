@@ -1,5 +1,7 @@
-import LogoutButton from '../../auth/LogoutButton';
-import useAuth from '../../auth/useAuth';
+import { Link } from 'react-router';
+
+import LogoutButton from 'src/features/auth/LogoutButton';
+import useAuth from 'src/features/auth/useAuth';
 
 import CreateWorkspaceForm from '../components/CreateWorkspaceForm/CreateWorkspaceForm';
 import useWorkspaces from '../hooks/useWorkspaces';
@@ -72,7 +74,14 @@ const WorkspacesPage = () => {
           <ul className={styles.list}>
             {workspaces.map((workspace) => (
               <li className={styles.card} key={workspace.id}>
-                <h3 className={styles.name}>{workspace.name}</h3>
+                <h3 className={styles.name}>
+                  <Link
+                    className={styles.workspaceLink}
+                    to={`/workspaces/${encodeURIComponent(workspace.id)}`}
+                  >
+                    {workspace.name}
+                  </Link>
+                </h3>
 
                 <span className={styles.role}>
                   Your role: {WORKSPACE_ROLE_LABELS[workspace.role]}

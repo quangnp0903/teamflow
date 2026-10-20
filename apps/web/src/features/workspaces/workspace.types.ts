@@ -25,3 +25,7 @@ export type WorkspaceResponse = Readonly<{
 export type WorkspaceListResponse = Readonly<{
   data: readonly WorkspaceWithRole[];
 }>;
+
+export type WorkspaceDetailsResponse = Readonly<{
+  data: WorkspaceWithRole;
+}>;

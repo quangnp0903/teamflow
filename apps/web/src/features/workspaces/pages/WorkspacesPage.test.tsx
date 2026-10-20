@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 
 import { AuthContext, type AuthContextValue } from '../../auth/auth.context';
 
@@ -47,7 +48,9 @@ function renderWorkspacesPage() {
 
   return render(
     <AuthContext value={authContextValue}>
-      <WorkspacesPage />
+      <MemoryRouter initialEntries={['/workspaces']}>
+        <WorkspacesPage />
+      </MemoryRouter>
     </AuthContext>,
     { reactStrictMode: false }
   );
@@ -89,6 +92,10 @@ describe('WorkspacesPage', () => {
         name: TEST_WORKSPACE.name,
       })
     ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole('link', { name: TEST_WORKSPACE.name })
+    ).toHaveAttribute('href', `/workspaces/${TEST_WORKSPACE.id}`);
 
     expect(screen.getByText('Your role: Owner')).toBeInTheDocument();
     expect(createWorkspaceMock).toHaveBeenCalledOnce();

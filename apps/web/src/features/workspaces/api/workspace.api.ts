@@ -3,6 +3,7 @@ import { requestJson } from 'src/lib/http';
 import type {
   CreateWorkspaceInput,
   Workspace,
+  WorkspaceDetailsResponse,
   WorkspaceListResponse,
   WorkspaceResponse,
   WorkspaceWithRole,
@@ -32,6 +33,21 @@ export async function createWorkspace(
       name: input.name,
     }),
   });
+
+  return response.data;
+}
+
+export async function getWorkspace(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceWithRole> {
+  const response = await requestJson<WorkspaceDetailsResponse>(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}`,
+    {
+      credentials: 'include',
+      signal,
+    }
+  );
 
   return response.data;
 }

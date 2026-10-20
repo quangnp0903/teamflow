@@ -68,3 +68,17 @@
   font-size: 0.875rem;
   font-weight: 600;
 }
+
+.workspaceLink {
+  color: #4338ca;
+  text-decoration: none;
+}
+
+.workspaceLink:hover {
+  text-decoration: underline;
+}
+
+.workspaceLink:focus-visible {
+  outline: 3px solid #818cf8;
+  outline-offset: 3px;
+}
