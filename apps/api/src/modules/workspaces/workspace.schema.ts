@@ -11,3 +11,5 @@ export const listWorkspacesQuerySchema = z.strictObject({});
 export const workspaceParamsSchema = z.strictObject({
   workspaceId: z.uuid(),
 });
+
+export const listWorkspaceMembersQuerySchema = z.strictObject({});

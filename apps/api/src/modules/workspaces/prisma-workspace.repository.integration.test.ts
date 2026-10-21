@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { PrismaClient } from '../../generated/prisma/client.ts';
 import { PrismaWorkspaceRepository } from './prisma-workspace.repository.ts';
+import type { WorkspaceMemberSummary } from './workspace.model.ts';
 
 const { parsed, error } = config({ path: '.env.test' });
 
@@ -47,7 +48,20 @@ const ownedListName = `workspace-list-owned-${runId}`;
 const sharedListName = `workspace-list-shared-${runId}`;
 const hiddenListName = `workspace-list-hidden-${runId}`;
 
-const fixtureUserIds = [ownerId, listingUserId, otherOwnerId, detailsMemberId];
+const rosterOwnerId = randomUUID();
+const rosterMemberId = randomUUID();
+const rosterOutsiderId = randomUUID();
+const rosterName = `workspace-roster-${runId}`;
+
+const fixtureUserIds = [
+  ownerId,
+  listingUserId,
+  otherOwnerId,
+  detailsMemberId,
+  rosterOwnerId,
+  rosterMemberId,
+  rosterOutsiderId,
+];
 
 const fixtureWorkspaceNames = [
   successName,
@@ -56,6 +70,7 @@ const fixtureWorkspaceNames = [
   sharedListName,
   hiddenListName,
   detailsName,
+  rosterName,
 ];
 
 describe('PrismaWorkspaceRepository', () => {
@@ -66,7 +81,7 @@ describe('PrismaWorkspaceRepository', () => {
       data: fixtureUserIds.map((id) => ({
         id,
         email: `workspace-fixture-${id}@example.com`,
-        displayName: 'Workspace fixture user',
+        displayName: `Workspace fixture ${id}`,
         passwordHash: 'unused-in-repository-test',
       })),
     });
@@ -281,5 +296,103 @@ describe('PrismaWorkspaceRepository', () => {
     await expect(
       repository.findForUser(detailsMemberId, workspace.id)
     ).resolves.toBeNull();
+  });
+
+  it('lists safe member summaries and respects membership changes', async () => {
+    const ownerJoinedAt = new Date('2026-10-20T10:00:00.000Z');
+    const memberJoinedAt = new Date('2026-10-20T11:00:00.000Z');
+
+    const workspace = await repository.createWithOwner({
+      name: rosterName,
+      ownerId: rosterOwnerId,
+    });
+
+    const ownerMembership = await prisma.workspaceMember.update({
+      where: {
+        workspaceId_userId: {
+          workspaceId: workspace.id,
+          userId: rosterOwnerId,
+        },
+      },
+      data: {
+        createdAt: ownerJoinedAt,
+      },
+    });
+
+    const memberMembership = await prisma.workspaceMember.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: rosterMemberId,
+        role: 'member',
+        createdAt: memberJoinedAt,
+      },
+    });
+
+    const ownerSummary = {
+      id: ownerMembership.id,
+      userId: rosterOwnerId,
+      displayName: `Workspace fixture ${rosterOwnerId}`,
+      role: 'owner',
+      joinedAt: ownerJoinedAt.toISOString(),
+    } satisfies WorkspaceMemberSummary;
+
+    const memberSummary = {
+      id: memberMembership.id,
+      userId: rosterMemberId,
+      displayName: `Workspace fixture ${rosterMemberId}`,
+      role: 'member',
+      joinedAt: memberJoinedAt.toISOString(),
+    } satisfies WorkspaceMemberSummary;
+
+    const expectedMembers = [ownerSummary, memberSummary];
+
+    await expect(
+      repository.listWorkspaceMembersForUser(rosterOwnerId, workspace.id)
+    ).resolves.toEqual(expectedMembers);
+
+    await expect(
+      repository.listWorkspaceMembersForUser(rosterMemberId, workspace.id)
+    ).resolves.toEqual(expectedMembers);
+
+    await expect(
+      repository.listWorkspaceMembersForUser(rosterOutsiderId, workspace.id)
+    ).resolves.toBeNull();
+
+    await expect(
+      repository.listWorkspaceMembersForUser(rosterOwnerId, randomUUID())
+    ).resolves.toBeNull();
+
+    await prisma.workspaceMember.update({
+      where: {
+        id: memberMembership.id,
+      },
+      data: {
+        role: 'admin',
+      },
+    });
+
+    await expect(
+      repository.listWorkspaceMembersForUser(rosterMemberId, workspace.id)
+    ).resolves.toEqual([
+      ownerSummary,
+      {
+        ...memberSummary,
+        role: 'admin',
+      },
+    ]);
+
+    await prisma.workspaceMember.delete({
+      where: {
+        id: memberMembership.id,
+      },
+    });
+
+    await expect(
+      repository.listWorkspaceMembersForUser(rosterMemberId, workspace.id)
+    ).resolves.toBeNull();
+
+    await expect(
+      repository.listWorkspaceMembersForUser(rosterOwnerId, workspace.id)
+    ).resolves.toEqual([ownerSummary]);
   });
 });

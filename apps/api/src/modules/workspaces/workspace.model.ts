@@ -22,3 +22,11 @@ export type WorkspaceWithRole = Workspace &
   Readonly<{
     role: WorkspaceRole;
   }>;
+
+export type WorkspaceMemberSummary = Readonly<{
+  id: string;
+  userId: string;
+  displayName: string;
+  role: WorkspaceRole;
+  joinedAt: string;
+}>;

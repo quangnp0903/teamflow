@@ -18,12 +18,14 @@ const TEST_ORIGINS = [
 const TEST_ORIGIN = TEST_ORIGINS[0];
 
 function createTestApp(
-  workspaceRepository: WorkspaceRepository = new InMemoryWorkspaceRepository()
+  workspaceRepository?: WorkspaceRepository,
+  userRepository = new InMemoryUserRepository()
 ) {
   return createApp({
     taskRepository: new InMemoryTaskRepository(),
-    workspaceRepository,
-    userRepository: new InMemoryUserRepository(),
+    workspaceRepository:
+      workspaceRepository ?? new InMemoryWorkspaceRepository(userRepository),
+    userRepository,
     sessionRepository: new InMemorySessionRepository(),
     passwordHasher: new FakePasswordHasher(),
     sessionTokenManager: new FakeSessionTokenManager(),
@@ -970,9 +972,10 @@ describe('workspace API', () => {
   });
 
   it('creates a normalized workspace for the authenticated user', async () => {
-    const repository = new InMemoryWorkspaceRepository();
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
     const createWithOwner = vi.spyOn(repository, 'createWithOwner');
-    const app = createTestApp(repository);
+    const app = createTestApp(repository, userRepository);
     const agent = await authenticatedBrowserRequest(app);
 
     const meResponse = await agent.get('/api/auth/me').expect(200);
@@ -1020,9 +1023,10 @@ describe('workspace API', () => {
       },
     },
   ])('rejects $caseName without calling storage', async ({ input }) => {
-    const repository = new InMemoryWorkspaceRepository();
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
     const createWithOwner = vi.spyOn(repository, 'createWithOwner');
-    const app = createTestApp(repository);
+    const app = createTestApp(repository, userRepository);
     const agent = await authenticatedBrowserRequest(app);
 
     const response = await agent.post('/api/workspaces').send(input);
@@ -1099,9 +1103,10 @@ describe('workspace API', () => {
   });
 
   it('rejects a client-supplied user filter before calling storage', async () => {
-    const repository = new InMemoryWorkspaceRepository();
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
     const listForUser = vi.spyOn(repository, 'listForUser');
-    const app = createTestApp(repository);
+    const app = createTestApp(repository, userRepository);
     const agent = await authenticatedBrowserRequest(app);
 
     const response = await agent.get('/api/workspaces').query({
@@ -1190,9 +1195,10 @@ describe('workspace details API', () => {
   });
 
   it('rejects malformed IDs before the workspace lookup', async () => {
-    const repository = new InMemoryWorkspaceRepository();
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
     const findForUser = vi.spyOn(repository, 'findForUser');
-    const app = createTestApp(repository);
+    const app = createTestApp(repository, userRepository);
     const agent = await authenticatedBrowserRequest(app);
 
     const response = await agent.get('/api/workspaces/not-a-uuid').expect(400);
@@ -1200,4 +1206,121 @@ describe('workspace details API', () => {
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
     expect(findForUser).not.toHaveBeenCalled();
   });
+});
+
+describe('workspace members API', () => {
+  it('returns the authenticated owner’s public member summary', async () => {
+    const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
+
+    const me = await agent.get('/api/auth/me').expect(200);
+
+    const created = await agent
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const response = await agent
+      .get(`/api/workspaces/${created.body.data.id}/members`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      data: [
+        {
+          id: expect.any(String),
+          userId: me.body.data.id,
+          displayName: me.body.data.displayName,
+          role: 'owner',
+          joinedAt: expect.any(String),
+        },
+      ],
+    });
+  });
+
+  it('rejects anonymous member-list requests', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app)
+      .get('/api/workspaces/00000000-0000-4000-8000-000000000000/members')
+      .expect(401);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'UNAUTHENTICATED',
+        message: 'Authentication required',
+      },
+    });
+  });
+
+  it('returns the same 404 for inaccessible and missing rosters', async () => {
+    const app = createTestApp();
+
+    const alice = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'roster-alice@example.com'
+    );
+
+    const bob = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'roster-bob@example.com'
+    );
+
+    const created = await alice
+      .post('/api/workspaces')
+      .send({ name: 'Alice Team' })
+      .expect(201);
+
+    const inaccessible = await bob
+      .get(`/api/workspaces/${created.body.data.id}/members`)
+      .expect(404);
+
+    const missing = await bob
+      .get('/api/workspaces/00000000-0000-4000-8000-000000000000/members')
+      .expect(404);
+
+    expect(inaccessible.body).toEqual({
+      error: {
+        code: 'WORKSPACE_NOT_FOUND',
+        message: 'Workspace not found',
+      },
+    });
+
+    expect(missing.body).toEqual(inaccessible.body);
+  });
+
+  it.each([
+    {
+      caseName: 'a malformed workspace ID',
+      workspaceId: 'not-a-uuid',
+      query: {},
+    },
+    {
+      caseName: 'a client-supplied user filter',
+      workspaceId: '00000000-0000-4000-8000-000000000000',
+      query: {
+        userId: '00000000-0000-4000-8000-000000000001',
+      },
+    },
+  ])(
+    'rejects $caseName before calling storage',
+    async ({ workspaceId, query }) => {
+      const userRepository = new InMemoryUserRepository();
+      const repository = new InMemoryWorkspaceRepository(userRepository);
+
+      const listMembers = vi.spyOn(repository, 'listWorkspaceMembersForUser');
+
+      const app = createTestApp(repository, userRepository);
+      const agent = await authenticatedBrowserRequest(app);
+
+      const response = await agent
+        .get(`/api/workspaces/${workspaceId}/members`)
+        .query(query)
+        .expect(400);
+
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
+      expect(listMembers).not.toHaveBeenCalled();
+    }
+  );
 });
