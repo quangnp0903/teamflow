@@ -5,14 +5,8 @@ import useAuth from 'src/features/auth/useAuth';
 
 import CreateWorkspaceForm from '../components/CreateWorkspaceForm/CreateWorkspaceForm';
 import useWorkspaces from '../hooks/useWorkspaces';
-import type { WorkspaceRole } from '../workspace.types';
 import styles from './WorkspacesPage.module.css';
-
-const WORKSPACE_ROLE_LABELS = {
-  owner: 'Owner',
-  admin: 'Admin',
-  member: 'Member',
-} satisfies Record<WorkspaceRole, string>;
+import { WORKSPACE_ROLE_LABELS } from '../workspace.constants';
 
 const WorkspacesPage = () => {
   const { logout } = useAuth();

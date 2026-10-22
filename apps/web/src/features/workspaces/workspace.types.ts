@@ -29,3 +29,15 @@ export type WorkspaceListResponse = Readonly<{
 export type WorkspaceDetailsResponse = Readonly<{
   data: WorkspaceWithRole;
 }>;
+
+export type WorkspaceMemberSummary = Readonly<{
+  id: string;
+  userId: string;
+  displayName: string;
+  role: WorkspaceRole;
+  joinedAt: string;
+}>;
+
+export type WorkspaceMemberListResponse = Readonly<{
+  data: readonly WorkspaceMemberSummary[];
+}>;

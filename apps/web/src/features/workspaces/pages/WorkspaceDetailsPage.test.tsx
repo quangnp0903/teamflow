@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
@@ -10,17 +10,22 @@ import {
 } from 'src/features/auth/auth.context';
 import { ApiError } from 'src/lib/http';
 
-import { getWorkspace } from '../api/workspace.api';
+import { getWorkspace, listWorkspaceMembers } from '../api/workspace.api';
 import { workspaceRoutes } from '../workspace.routes';
-import type { WorkspaceWithRole } from '../workspace.types';
+import type {
+  WorkspaceMemberSummary,
+  WorkspaceWithRole,
+} from '../workspace.types';
 
 vi.mock('../api/workspace.api', () => ({
   getWorkspace: vi.fn(),
   listWorkspaces: vi.fn(),
   createWorkspace: vi.fn(),
+  listWorkspaceMembers: vi.fn(),
 }));
 
 const getWorkspaceMock = vi.mocked(getWorkspace);
+const listWorkspaceMembersMock = vi.mocked(listWorkspaceMembers);
 
 const TEST_WORKSPACE = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -29,6 +34,23 @@ const TEST_WORKSPACE = {
   createdAt: '2026-10-14T10:00:00.000Z',
   updatedAt: '2026-10-14T10:00:00.000Z',
 } satisfies WorkspaceWithRole;
+
+const TEST_MEMBERS = [
+  {
+    id: '00000000-0000-4000-8000-000000000011',
+    userId: '00000000-0000-4000-8000-000000000002',
+    displayName: 'Alice',
+    role: 'owner',
+    joinedAt: '2026-10-20T10:00:00.000Z',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000012',
+    userId: '00000000-0000-4000-8000-000000000004',
+    displayName: 'Bob',
+    role: 'member',
+    joinedAt: '2026-10-20T11:00:00.000Z',
+  },
+] satisfies readonly WorkspaceMemberSummary[];
 
 const SECOND_WORKSPACE_ID = '00000000-0000-4000-8000-000000000003';
 
@@ -77,6 +99,7 @@ function renderWorkspaceDetails(workspaceId = TEST_WORKSPACE.id) {
 
 beforeEach(() => {
   getWorkspaceMock.mockReset();
+  listWorkspaceMembersMock.mockReset().mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -99,8 +122,13 @@ describe('WorkspaceDetailsPage', () => {
       })
     ).toBeInTheDocument();
 
-    expect(screen.getByText('Member')).toBeInTheDocument();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    const details = screen.getByRole('region', {
+      name: 'Workspace details',
+    });
+
+    expect(within(details).getByText('Member')).toBeInTheDocument();
+
+    expect(within(details).queryByRole('status')).not.toBeInTheDocument();
 
     expect(
       screen.getByRole('link', { name: 'Back to workspaces' })
@@ -204,5 +232,85 @@ describe('WorkspaceDetailsPage', () => {
     unmount();
 
     expect(secondSignal?.aborted).toBe(true);
+  });
+
+  it('displays workspace members and their roles', async () => {
+    getWorkspaceMock.mockResolvedValue(TEST_WORKSPACE);
+    listWorkspaceMembersMock.mockResolvedValue(TEST_MEMBERS);
+
+    renderWorkspaceDetails();
+
+    const members = await screen.findByRole('region', {
+      name: 'Members',
+    });
+
+    const roster = await within(members).findByRole('list', {
+      name: 'Workspace members',
+    });
+
+    const cards = within(roster).getAllByRole('listitem');
+
+    expect(cards).toHaveLength(2);
+
+    for (const card of cards) {
+      const member = within(card);
+
+      if (member.queryByText('Alice')) {
+        expect(member.getByText('Owner')).toBeInTheDocument();
+      } else {
+        expect(member.getByText('Bob')).toBeInTheDocument();
+        expect(member.getByText('Member')).toBeInTheDocument();
+      }
+    }
+
+    expect(within(roster).getByText('Alice')).toBeInTheDocument();
+    expect(within(roster).getByText('Bob')).toBeInTheDocument();
+    expect(within(members).queryByRole('status')).not.toBeInTheDocument();
+
+    expect(listWorkspaceMembersMock).toHaveBeenCalledOnce();
+    expect(listWorkspaceMembersMock).toHaveBeenCalledWith(
+      TEST_WORKSPACE.id,
+      expect.any(AbortSignal)
+    );
+  });
+
+  it('retries member loading without reloading workspace details', async () => {
+    const user = userEvent.setup();
+
+    getWorkspaceMock.mockResolvedValue(TEST_WORKSPACE);
+    listWorkspaceMembersMock
+      .mockRejectedValueOnce(new Error('Members could not be loaded'))
+      .mockResolvedValueOnce(TEST_MEMBERS);
+
+    renderWorkspaceDetails();
+
+    const members = await screen.findByRole('region', {
+      name: 'Members',
+    });
+
+    expect(await within(members).findByRole('alert')).toHaveTextContent(
+      'Members could not be loaded'
+    );
+
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: TEST_WORKSPACE.name,
+      })
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(members).getByRole('button', { name: 'Retry members' })
+    );
+
+    expect(await within(members).findByText('Alice')).toBeInTheDocument();
+    expect(within(members).getByText('Bob')).toBeInTheDocument();
+    expect(within(members).queryByRole('alert')).not.toBeInTheDocument();
+    expect(
+      within(members).queryByRole('button', { name: 'Retry members' })
+    ).not.toBeInTheDocument();
+
+    expect(listWorkspaceMembersMock).toHaveBeenCalledTimes(2);
+    expect(getWorkspaceMock).toHaveBeenCalledOnce();
   });
 });

@@ -5,6 +5,8 @@ import type {
   Workspace,
   WorkspaceDetailsResponse,
   WorkspaceListResponse,
+  WorkspaceMemberListResponse,
+  WorkspaceMemberSummary,
   WorkspaceResponse,
   WorkspaceWithRole,
 } from '../workspace.types';
@@ -43,6 +45,21 @@ export async function getWorkspace(
 ): Promise<WorkspaceWithRole> {
   const response = await requestJson<WorkspaceDetailsResponse>(
     `/api/workspaces/${encodeURIComponent(workspaceId)}`,
+    {
+      credentials: 'include',
+      signal,
+    }
+  );
+
+  return response.data;
+}
+
+export async function listWorkspaceMembers(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<readonly WorkspaceMemberSummary[]> {
+  const response = await requestJson<WorkspaceMemberListResponse>(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}/members`,
     {
       credentials: 'include',
       signal,

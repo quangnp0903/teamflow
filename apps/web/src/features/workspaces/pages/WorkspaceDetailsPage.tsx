@@ -4,15 +4,10 @@ import { Link, useParams } from 'react-router';
 import LogoutButton from 'src/features/auth/LogoutButton';
 import useAuth from 'src/features/auth/useAuth';
 
-import type { WorkspaceRole } from '../workspace.types';
 import useWorkspace from '../hooks/useWorkspace';
+import { WORKSPACE_ROLE_LABELS } from '../workspace.constants';
+import WorkspaceMembersPanel from '../components/WorkspaceMembersPanel/WorkspaceMembersPanel';
 import styles from './WorkspaceDetailsPage.module.css';
-
-const WORKSPACE_ROLE_LABELS = {
-  owner: 'Owner',
-  admin: 'Admin',
-  member: 'Member',
-} satisfies Record<WorkspaceRole, string>;
 
 type WorkspaceDetailsProps = Readonly<{
   workspaceId: string;
@@ -86,6 +81,9 @@ const WorkspaceDetails: FC<WorkspaceDetailsProps> = ({ workspaceId }) => {
           </dl>
         )}
       </section>
+      {state.status === 'success' && (
+        <WorkspaceMembersPanel workspaceId={state.workspace.id} />
+      )}
     </main>
   );
 };
