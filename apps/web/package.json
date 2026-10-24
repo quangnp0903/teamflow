@@ -9,10 +9,15 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "predev": "npm run build --workspace=@teamflow/contracts",
+    "prebuild": "npm run build --workspace=@teamflow/contracts",
+    "pretypecheck": "npm run build --workspace=@teamflow/contracts",
+    "pretest": "npm run build --workspace=@teamflow/contracts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
+    "@teamflow/contracts": "^0.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.89.0",

@@ -1,13 +1,13 @@
-export const WORKSPACE_ROLES = ['owner', 'admin', 'member'] as const;
+import type { WorkspaceRole } from '@teamflow/contracts/workspaces';
 
-export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
+export { WORKSPACE_ROLES } from '@teamflow/contracts/workspaces';
 
-export type Workspace = Readonly<{
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-}>;
+export type {
+  Workspace,
+  WorkspaceRole,
+  WorkspaceWithRole,
+  WorkspaceMemberSummary,
+} from '@teamflow/contracts/workspaces';
 
 export type WorkspaceMember = Readonly<{
   id: string;
@@ -16,17 +16,4 @@ export type WorkspaceMember = Readonly<{
   role: WorkspaceRole;
   createdAt: string;
   updatedAt: string;
-}>;
-
-export type WorkspaceWithRole = Workspace &
-  Readonly<{
-    role: WorkspaceRole;
-  }>;
-
-export type WorkspaceMemberSummary = Readonly<{
-  id: string;
-  userId: string;
-  displayName: string;
-  role: WorkspaceRole;
-  joinedAt: string;
 }>;

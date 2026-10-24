@@ -13,13 +13,19 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:migrate:test": "prisma migrate deploy --config prisma.test.config.ts"
+    "db:migrate:test": "prisma migrate deploy --config prisma.test.config.ts",
+    "predev": "npm run build --workspace=@teamflow/contracts",
+    "pretypecheck": "npm run build --workspace=@teamflow/contracts",
+    "pretest": "npm run build --workspace=@teamflow/contracts",
+    "pretest:watch": "npm run build --workspace=@teamflow/contracts",
+    "pretest:integration": "npm run build --workspace=@teamflow/contracts"
   },
   "keywords": [],
   "type": "module",
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
+    "@teamflow/contracts": "^0.0.0",
     "argon2": "^0.45.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
