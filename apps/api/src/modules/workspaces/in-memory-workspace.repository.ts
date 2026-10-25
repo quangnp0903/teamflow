@@ -8,9 +8,11 @@ import type {
 } from './workspace.model.ts';
 import type {
   CreateWorkspaceRecord,
+  RenameWorkspaceRecord,
   WorkspaceRepository,
 } from './workspace.repository.ts';
 import type { UserRepository } from '../users/user.repository.ts';
+import { canManageWorkspace } from './workspace.permission.ts';
 
 export class InMemoryWorkspaceRepository implements WorkspaceRepository {
   private readonly workspaces: Workspace[] = [];
@@ -146,5 +148,42 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     }
 
     return summaries;
+  }
+
+  async renameForManager(
+    userId: string,
+    workspaceId: string,
+    input: RenameWorkspaceRecord
+  ): Promise<Workspace | null> {
+    const hasPermission = this.members.some(
+      (membership) =>
+        membership.workspaceId === workspaceId &&
+        membership.userId === userId &&
+        canManageWorkspace(membership.role)
+    );
+
+    if (!hasPermission) {
+      return null;
+    }
+
+    const index = this.workspaces.findIndex(
+      (workspace) => workspace.id === workspaceId
+    );
+
+    const workspace = this.workspaces[index];
+
+    if (workspace === undefined) {
+      return null;
+    }
+
+    const updatedWorkspace: Workspace = {
+      ...workspace,
+      name: input.name,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.workspaces[index] = updatedWorkspace;
+
+    return updatedWorkspace;
   }
 }

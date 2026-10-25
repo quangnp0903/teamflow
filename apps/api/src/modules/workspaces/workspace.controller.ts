@@ -5,6 +5,7 @@ import {
   createWorkspaceSchema,
   listWorkspaceMembersQuerySchema,
   listWorkspacesQuerySchema,
+  renameWorkspaceSchema,
   workspaceParamsSchema,
 } from './workspace.schema.ts';
 import type { WorkspaceService } from './workspace.service.ts';
@@ -80,6 +81,27 @@ export class WorkspaceController {
 
     response.status(200).json({
       data: members,
+    });
+  };
+
+  rename = async (request: Request, response: Response) => {
+    const user = request.user;
+
+    if (user === undefined) {
+      throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
+    }
+
+    const { workspaceId } = workspaceParamsSchema.parse(request.params);
+    const input = renameWorkspaceSchema.parse(request.body);
+
+    const workspace = await this.service.renameWorkspace(
+      user.id,
+      workspaceId,
+      input
+    );
+
+    response.status(200).json({
+      data: workspace,
     });
   };
 }

@@ -1,3 +1,5 @@
+import type { RenameWorkspaceInput } from '@teamflow/contracts/workspaces';
+
 import type {
   Workspace,
   WorkspaceMemberSummary,
@@ -6,6 +8,7 @@ import type {
 import type { WorkspaceRepository } from './workspace.repository.ts';
 import type { CreateWorkspaceInput } from './workspace.schema.ts';
 import { AppError } from '../../lib/errors/app-error.ts';
+import { canManageWorkspace } from './workspace.permission.ts';
 
 export class WorkspaceService {
   private readonly repository: WorkspaceRepository;
@@ -55,5 +58,33 @@ export class WorkspaceService {
     }
 
     return members;
+  }
+
+  async renameWorkspace(
+    userId: string,
+    workspaceId: string,
+    input: RenameWorkspaceInput
+  ): Promise<Workspace> {
+    const workspace = await this.getWorkspaceById(userId, workspaceId);
+
+    if (!canManageWorkspace(workspace.role)) {
+      throw new AppError(
+        403,
+        'WORKSPACE_FORBIDDEN',
+        'You do not have permission to rename this workspace'
+      );
+    }
+
+    const renamedWorkspace = await this.repository.renameForManager(
+      userId,
+      workspaceId,
+      { name: input.name }
+    );
+
+    if (renamedWorkspace === null) {
+      throw new AppError(404, 'WORKSPACE_NOT_FOUND', 'Workspace not found');
+    }
+
+    return renamedWorkspace;
   }
 }

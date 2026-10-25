@@ -8,6 +8,7 @@ export function createWorkspaceRouter(controller: WorkspaceController) {
   router.get('/', controller.list);
   router.get('/:workspaceId/members', controller.listMembers);
   router.get('/:workspaceId', controller.getById);
+  router.patch('/:workspaceId', controller.rename);
   router.post('/', controller.create);
 
   return router;

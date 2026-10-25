@@ -21,3 +21,5 @@ export type WorkspaceMemberSummary = Readonly<{
   role: WorkspaceRole;
   joinedAt: string;
 }>;
+
+export type RenameWorkspaceInput = Pick<Workspace, 'name'>;

@@ -1324,3 +1324,227 @@ describe('workspace members API', () => {
     }
   );
 });
+
+describe('workspace rename API', () => {
+  const missingWorkspaceId = '00000000-0000-4000-8000-000000000000';
+
+  it('lets an owner rename a workspace and normalizes the name', async () => {
+    const app = createTestApp();
+    const agent = await authenticatedBrowserRequest(app);
+
+    const created = await agent
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const workspaceId = created.body.data.id;
+
+    const renamed = await agent
+      .patch(`/api/workspaces/${workspaceId}`)
+      .send({ name: '  Platform Team  ' })
+      .expect(200);
+
+    expect(renamed.body).toEqual({
+      data: {
+        ...created.body.data,
+        name: 'Platform Team',
+        updatedAt: expect.any(String),
+      },
+    });
+
+    const details = await agent
+      .get(`/api/workspaces/${workspaceId}`)
+      .expect(200);
+
+    expect(details.body).toEqual({
+      data: {
+        ...renamed.body.data,
+        role: 'owner',
+      },
+    });
+  });
+
+  it('rejects anonymous workspace renaming', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app)
+      .patch(`/api/workspaces/${missingWorkspaceId}`)
+      .send({ name: 'Platform Team' })
+      .expect(401);
+
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+  });
+
+  it('returns the same 404 for inaccessible and missing workspaces', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const renameForManager = vi.spyOn(repository, 'renameForManager');
+    const app = createTestApp(repository, userRepository);
+
+    const owner = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'rename-owner@example.com'
+    );
+
+    const outsider = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'rename-outsider@example.com'
+    );
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Owner Team' })
+      .expect(201);
+
+    const workspaceId = created.body.data.id;
+
+    const inaccessible = await outsider
+      .patch(`/api/workspaces/${workspaceId}`)
+      .send({ name: 'Changed by outsider' })
+      .expect(404);
+
+    const missing = await outsider
+      .patch(`/api/workspaces/${missingWorkspaceId}`)
+      .send({ name: 'Missing Team' })
+      .expect(404);
+
+    expect(inaccessible.body).toEqual({
+      error: {
+        code: 'WORKSPACE_NOT_FOUND',
+        message: 'Workspace not found',
+      },
+    });
+
+    expect(missing.body).toEqual(inaccessible.body);
+    expect(renameForManager).not.toHaveBeenCalled();
+
+    const details = await owner
+      .get(`/api/workspaces/${workspaceId}`)
+      .expect(200);
+
+    expect(details.body.data.name).toBe('Owner Team');
+  });
+
+  it.each([
+    {
+      caseName: 'a malformed workspace ID',
+      workspaceId: 'not-a-uuid',
+      input: { name: 'Platform Team' },
+    },
+    {
+      caseName: 'a missing name',
+      workspaceId: missingWorkspaceId,
+      input: {},
+    },
+    {
+      caseName: 'a blank name',
+      workspaceId: missingWorkspaceId,
+      input: { name: '   ' },
+    },
+    {
+      caseName: 'an oversized name',
+      workspaceId: missingWorkspaceId,
+      input: { name: 'x'.repeat(121) },
+    },
+    {
+      caseName: 'a client-supplied role',
+      workspaceId: missingWorkspaceId,
+      input: { name: 'Platform Team', role: 'owner' },
+    },
+    {
+      caseName: 'a client-supplied user ID',
+      workspaceId: missingWorkspaceId,
+      input: {
+        name: 'Platform Team',
+        userId: '00000000-0000-4000-8000-000000000001',
+      },
+    },
+  ])(
+    'rejects $caseName before calling storage',
+    async ({ workspaceId, input }) => {
+      const userRepository = new InMemoryUserRepository();
+      const repository = new InMemoryWorkspaceRepository(userRepository);
+
+      const findForUser = vi.spyOn(repository, 'findForUser');
+      const renameForManager = vi.spyOn(repository, 'renameForManager');
+
+      const app = createTestApp(repository, userRepository);
+      const agent = await authenticatedBrowserRequest(app);
+
+      const response = await agent
+        .patch(`/api/workspaces/${workspaceId}`)
+        .send(input)
+        .expect(400);
+
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
+      expect(findForUser).not.toHaveBeenCalled();
+      expect(renameForManager).not.toHaveBeenCalled();
+    }
+  );
+
+  it('rejects renaming when the requester has the member role', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+    const agent = await authenticatedBrowserRequest(app);
+
+    const created = await agent
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    // Simulate the membership lookup reporting a regular member.
+    vi.spyOn(repository, 'findForUser').mockResolvedValueOnce({
+      ...created.body.data,
+      role: 'member',
+    });
+
+    const renameForManager = vi.spyOn(repository, 'renameForManager');
+
+    const response = await agent
+      .patch(`/api/workspaces/${created.body.data.id}`)
+      .send({ name: 'Platform Team' })
+      .expect(403);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'WORKSPACE_FORBIDDEN',
+        message: 'You do not have permission to rename this workspace',
+      },
+    });
+
+    expect(renameForManager).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the guarded update no longer matches', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+    const agent = await authenticatedBrowserRequest(app);
+
+    const created = await agent
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const renameForManager = vi
+      .spyOn(repository, 'renameForManager')
+      .mockResolvedValueOnce(null);
+
+    const response = await agent
+      .patch(`/api/workspaces/${created.body.data.id}`)
+      .send({ name: 'Platform Team' })
+      .expect(404);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'WORKSPACE_NOT_FOUND',
+        message: 'Workspace not found',
+      },
+    });
+
+    expect(renameForManager).toHaveBeenCalledTimes(1);
+  });
+});

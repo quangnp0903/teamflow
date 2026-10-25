@@ -8,8 +8,10 @@ import type {
   WorkspaceMemberSummary,
   WorkspaceWithRole,
 } from './workspace.model.ts';
+import { WORKSPACE_MANAGER_ROLES } from './workspace.permission.ts';
 import type {
   CreateWorkspaceRecord,
+  RenameWorkspaceRecord,
   WorkspaceRepository,
 } from './workspace.repository.ts';
 
@@ -152,5 +154,30 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       role: member.role,
       joinedAt: member.createdAt.toISOString(),
     }));
+  }
+
+  async renameForManager(
+    userId: string,
+    workspaceId: string,
+    input: RenameWorkspaceRecord
+  ): Promise<Workspace | null> {
+    const [workspace] = await this.client.workspace.updateManyAndReturn({
+      where: {
+        id: workspaceId,
+        members: {
+          some: {
+            userId,
+            role: {
+              in: [...WORKSPACE_MANAGER_ROLES],
+            },
+          },
+        },
+      },
+      data: {
+        name: input.name,
+      },
+    });
+
+    return workspace === undefined ? null : toWorkspace(workspace);
   }
 }

@@ -53,6 +53,15 @@ const rosterMemberId = randomUUID();
 const rosterOutsiderId = randomUUID();
 const rosterName = `workspace-roster-${runId}`;
 
+const renameUsers = {
+  owner: randomUUID(),
+  admin: randomUUID(),
+  member: randomUUID(),
+  outsider: randomUUID(),
+};
+
+const renameWorkspaceIds: string[] = [];
+
 const fixtureUserIds = [
   ownerId,
   listingUserId,
@@ -61,6 +70,7 @@ const fixtureUserIds = [
   rosterOwnerId,
   rosterMemberId,
   rosterOutsiderId,
+  ...Object.values(renameUsers),
 ];
 
 const fixtureWorkspaceNames = [
@@ -91,9 +101,18 @@ describe('PrismaWorkspaceRepository', () => {
     try {
       await prisma.workspace.deleteMany({
         where: {
-          name: {
-            in: fixtureWorkspaceNames,
-          },
+          OR: [
+            {
+              name: {
+                in: fixtureWorkspaceNames,
+              },
+            },
+            {
+              id: {
+                in: renameWorkspaceIds,
+              },
+            },
+          ],
         },
       });
 
@@ -394,5 +413,118 @@ describe('PrismaWorkspaceRepository', () => {
     await expect(
       repository.listWorkspaceMembersForUser(rosterOwnerId, workspace.id)
     ).resolves.toEqual([ownerSummary]);
+  });
+
+  it.each([
+    { actor: 'owner', canRename: true },
+    { actor: 'admin', canRename: true },
+    { actor: 'member', canRename: false },
+    { actor: 'outsider', canRename: false },
+  ] as const)(
+    'enforces rename permissions for $actor',
+    async ({ actor, canRename }) => {
+      const workspaceId = randomUUID();
+      const originalName = `workspace-rename-${actor}-${runId}`;
+      const newName = `workspace-renamed-${actor}-${runId}`;
+
+      renameWorkspaceIds.push(workspaceId);
+
+      await prisma.workspace.create({
+        data: {
+          id: workspaceId,
+          name: originalName,
+          members: {
+            create: [
+              { userId: renameUsers.owner, role: 'owner' },
+              { userId: renameUsers.admin, role: 'admin' },
+              { userId: renameUsers.member, role: 'member' },
+            ],
+          },
+        },
+      });
+
+      const result = await repository.renameForManager(
+        renameUsers[actor],
+        workspaceId,
+        { name: newName }
+      );
+
+      const stored = await prisma.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+      });
+
+      if (canRename) {
+        expect(stored.name).toBe(newName);
+
+        expect(result).toEqual({
+          id: stored.id,
+          name: newName,
+          createdAt: stored.createdAt.toISOString(),
+          updatedAt: stored.updatedAt.toISOString(),
+        });
+      } else {
+        expect(result).toBeNull();
+        expect(stored.name).toBe(originalName);
+      }
+    }
+  );
+
+  it('checks the current role when writing after an admin is demoted', async () => {
+    const workspaceId = randomUUID();
+    const originalName = `workspace-rename-demotion-${runId}`;
+
+    renameWorkspaceIds.push(workspaceId);
+
+    await prisma.workspace.create({
+      data: {
+        id: workspaceId,
+        name: originalName,
+        members: {
+          create: [
+            { userId: renameUsers.owner, role: 'owner' },
+            { userId: renameUsers.admin, role: 'admin' },
+          ],
+        },
+      },
+    });
+
+    const earlierLookup = await repository.findForUser(
+      renameUsers.admin,
+      workspaceId
+    );
+
+    expect(earlierLookup?.role).toBe('admin');
+
+    await prisma.workspaceMember.update({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId: renameUsers.admin,
+        },
+      },
+      data: {
+        role: 'member',
+      },
+    });
+
+    await expect(
+      repository.renameForManager(renameUsers.admin, workspaceId, {
+        name: `workspace-demoted-update-${runId}`,
+      })
+    ).resolves.toBeNull();
+
+    const stored = await prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+    });
+
+    expect(stored.name).toBe(originalName);
+  });
+
+  it('returns null when renaming a missing workspace', async () => {
+    await expect(
+      repository.renameForManager(renameUsers.owner, randomUUID(), {
+        name: 'Missing workspace',
+      })
+    ).resolves.toBeNull();
   });
 });

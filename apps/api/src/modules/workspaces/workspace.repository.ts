@@ -9,6 +9,8 @@ export type CreateWorkspaceRecord = Readonly<{
   ownerId: string;
 }>;
 
+export type RenameWorkspaceRecord = Pick<Workspace, 'name'>;
+
 export interface WorkspaceRepository {
   /**
    * Creates a workspace and its owner's membership atomically.
@@ -27,4 +29,14 @@ export interface WorkspaceRepository {
     userId: string,
     workspaceId: string
   ): Promise<readonly WorkspaceMemberSummary[] | null>;
+
+  /**
+   * Renames a workspace only when the requester is an owner or admin.
+   * Returns null when no workspace matches that permission scope.
+   */
+  renameForManager(
+    userId: string,
+    workspaceId: string,
+    input: RenameWorkspaceRecord
+  ): Promise<Workspace | null>;
 }
