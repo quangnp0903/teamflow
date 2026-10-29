@@ -2,8 +2,14 @@ import { useEffect, useState } from 'react';
 
 import { ApiError } from 'src/lib/http';
 
-import { getWorkspace } from '../api/workspace.api';
-import type { WorkspaceWithRole } from '../workspace.types';
+import {
+  getWorkspace,
+  renameWorkspace as renameWorkspaceRequest,
+} from '../api/workspace.api';
+import type {
+  WorkspaceWithRole,
+  RenameWorkspaceInput,
+} from '../workspace.types';
 
 type WorkspaceState =
   | Readonly<{ status: 'loading' }>
@@ -26,6 +32,27 @@ function useWorkspace(workspaceId: string) {
   function retry(): void {
     setState({ status: 'loading' });
     setRefreshVersion((currentVersion) => currentVersion + 1);
+  }
+
+  async function renameWorkspace(input: RenameWorkspaceInput): Promise<void> {
+    const updatedWorkspace = await renameWorkspaceRequest(workspaceId, input);
+
+    setState((currentState) => {
+      if (
+        currentState.status !== 'success' ||
+        currentState.workspace.id !== updatedWorkspace.id
+      ) {
+        return currentState;
+      }
+
+      return {
+        status: 'success',
+        workspace: {
+          ...updatedWorkspace,
+          role: currentState.workspace.role,
+        },
+      };
+    });
   }
 
   useEffect(() => {
@@ -70,7 +97,7 @@ function useWorkspace(workspaceId: string) {
     };
   }, [workspaceId, refreshVersion]);
 
-  return { state, retry };
+  return { state, retry, renameWorkspace };
 }
 
 export default useWorkspace;

@@ -2,6 +2,7 @@ import { requestJson } from 'src/lib/http';
 
 import type {
   CreateWorkspaceInput,
+  RenameWorkspaceInput,
   Workspace,
   WorkspaceDetailsResponse,
   WorkspaceListResponse,
@@ -63,6 +64,27 @@ export async function listWorkspaceMembers(
     {
       credentials: 'include',
       signal,
+    }
+  );
+
+  return response.data;
+}
+
+export async function renameWorkspace(
+  workspaceId: string,
+  input: RenameWorkspaceInput
+): Promise<Workspace> {
+  const response = await requestJson<WorkspaceResponse>(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}`,
+    {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: input.name,
+      }),
     }
   );
 

@@ -11,6 +11,7 @@ export type {
   WorkspaceRole,
   WorkspaceWithRole,
   WorkspaceMemberSummary,
+  RenameWorkspaceInput,
 } from '@teamflow/contracts/workspaces';
 
 export type CreateWorkspaceInput = Readonly<{

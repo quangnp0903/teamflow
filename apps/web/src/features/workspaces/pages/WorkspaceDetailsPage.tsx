@@ -7,6 +7,7 @@ import useAuth from 'src/features/auth/useAuth';
 import useWorkspace from '../hooks/useWorkspace';
 import { WORKSPACE_ROLE_LABELS } from '../workspace.constants';
 import WorkspaceMembersPanel from '../components/WorkspaceMembersPanel/WorkspaceMembersPanel';
+import RenameWorkspaceForm from '../components/RenameWorkspaceForm/RenameWorkspaceForm';
 import styles from './WorkspaceDetailsPage.module.css';
 
 type WorkspaceDetailsProps = Readonly<{
@@ -15,7 +16,7 @@ type WorkspaceDetailsProps = Readonly<{
 
 const WorkspaceDetails: FC<WorkspaceDetailsProps> = ({ workspaceId }) => {
   const { logout } = useAuth();
-  const { state, retry } = useWorkspace(workspaceId);
+  const { state, retry, renameWorkspace } = useWorkspace(workspaceId);
 
   return (
     <main className="app-shell">
@@ -84,6 +85,14 @@ const WorkspaceDetails: FC<WorkspaceDetailsProps> = ({ workspaceId }) => {
       {state.status === 'success' && (
         <WorkspaceMembersPanel workspaceId={state.workspace.id} />
       )}
+      {state.status === 'success' &&
+        (state.workspace.role === 'owner' ||
+          state.workspace.role === 'admin') && (
+          <RenameWorkspaceForm
+            workspaceName={state.workspace.name}
+            onRename={renameWorkspace}
+          />
+        )}
     </main>
   );
 };
