@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
-export const emailSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .pipe(z.email().max(254));
+import { emailSchema } from '../../lib/validation/email.schema.ts';
 
 export const displayNameSchema = z.string().trim().min(1).max(80);
 

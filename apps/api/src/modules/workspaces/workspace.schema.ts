@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import type { RenameWorkspaceInput } from '@teamflow/contracts/workspaces';
+import type {
+  RenameWorkspaceInput,
+  AddWorkspaceMemberInput,
+} from '@teamflow/contracts/workspaces';
+import { emailSchema } from '../../lib/validation/email.schema.ts';
 
 const workspaceNameSchema = z.string().trim().min(1).max(120);
 
@@ -21,3 +25,7 @@ export const workspaceParamsSchema = z.strictObject({
 });
 
 export const listWorkspaceMembersQuerySchema = z.strictObject({});
+
+export const addWorkspaceMemberSchema = z.strictObject({
+  email: emailSchema,
+}) satisfies z.ZodType<AddWorkspaceMemberInput>;

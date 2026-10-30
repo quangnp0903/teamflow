@@ -11,6 +11,18 @@ export type CreateWorkspaceRecord = Readonly<{
 
 export type RenameWorkspaceRecord = Pick<Workspace, 'name'>;
 
+export type AddWorkspaceMemberResult =
+  | Readonly<{
+      status: 'added';
+      member: WorkspaceMemberSummary;
+    }>
+  | Readonly<{
+      status: 'already_member';
+    }>
+  | Readonly<{
+      status: 'unavailable';
+    }>;
+
 export interface WorkspaceRepository {
   /**
    * Creates a workspace and its owner's membership atomically.
@@ -39,4 +51,15 @@ export interface WorkspaceRepository {
     workspaceId: string,
     input: RenameWorkspaceRecord
   ): Promise<Workspace | null>;
+
+  /**
+   * Adds an existing user as a member when the requester is an owner or admin.
+   * Returns unavailable when the required workspace/user cannot be connected
+   * within that permission scope.
+   */
+  addMemberForManager(
+    requesterId: string,
+    workspaceId: string,
+    targetUserId: string
+  ): Promise<AddWorkspaceMemberResult>;
 }

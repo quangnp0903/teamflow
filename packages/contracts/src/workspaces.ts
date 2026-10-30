@@ -23,3 +23,7 @@ export type WorkspaceMemberSummary = Readonly<{
 }>;
 
 export type RenameWorkspaceInput = Pick<Workspace, 'name'>;
+
+export type AddWorkspaceMemberInput = Readonly<{
+  email: string;
+}>;

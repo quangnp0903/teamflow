@@ -62,6 +62,16 @@ const renameUsers = {
 
 const renameWorkspaceIds: string[] = [];
 
+const additionUsers = {
+  owner: randomUUID(),
+  admin: randomUUID(),
+  member: randomUUID(),
+  outsider: randomUUID(),
+  target: randomUUID(),
+};
+
+const additionWorkspaceIds: string[] = [];
+
 const fixtureUserIds = [
   ownerId,
   listingUserId,
@@ -71,6 +81,7 @@ const fixtureUserIds = [
   rosterMemberId,
   rosterOutsiderId,
   ...Object.values(renameUsers),
+  ...Object.values(additionUsers),
 ];
 
 const fixtureWorkspaceNames = [
@@ -82,6 +93,28 @@ const fixtureWorkspaceNames = [
   detailsName,
   rosterName,
 ];
+
+async function createMemberAdditionWorkspace(): Promise<string> {
+  const workspaceId = randomUUID();
+
+  additionWorkspaceIds.push(workspaceId);
+
+  await prisma.workspace.create({
+    data: {
+      id: workspaceId,
+      name: `workspace-member-addition-${workspaceId}`,
+      members: {
+        create: [
+          { userId: additionUsers.owner, role: 'owner' },
+          { userId: additionUsers.admin, role: 'admin' },
+          { userId: additionUsers.member, role: 'member' },
+        ],
+      },
+    },
+  });
+
+  return workspaceId;
+}
 
 describe('PrismaWorkspaceRepository', () => {
   beforeAll(async () => {
@@ -109,7 +142,7 @@ describe('PrismaWorkspaceRepository', () => {
             },
             {
               id: {
-                in: renameWorkspaceIds,
+                in: [...renameWorkspaceIds, ...additionWorkspaceIds],
               },
             },
           ],
@@ -526,5 +559,147 @@ describe('PrismaWorkspaceRepository', () => {
         name: 'Missing workspace',
       })
     ).resolves.toBeNull();
+  });
+
+  it.each([
+    { actor: 'owner', canAdd: true },
+    { actor: 'admin', canAdd: true },
+    { actor: 'member', canAdd: false },
+    { actor: 'outsider', canAdd: false },
+  ] as const)(
+    'enforces member-addition permissions for $actor',
+    async ({ actor, canAdd }) => {
+      const workspaceId = await createMemberAdditionWorkspace();
+
+      const result = await repository.addMemberForManager(
+        additionUsers[actor],
+        workspaceId,
+        additionUsers.target
+      );
+
+      const stored = await prisma.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId: additionUsers.target,
+          },
+        },
+      });
+
+      if (!canAdd) {
+        expect(result).toEqual({ status: 'unavailable' });
+        expect(stored).toBeNull();
+        return;
+      }
+
+      if (stored === null) {
+        throw new Error('Expected the target membership to be persisted');
+      }
+
+      expect(stored.role).toBe('member');
+
+      expect(result).toEqual({
+        status: 'added',
+        member: {
+          id: stored.id,
+          userId: additionUsers.target,
+          displayName: `Workspace fixture ${additionUsers.target}`,
+          role: 'member',
+          joinedAt: stored.createdAt.toISOString(),
+        },
+      });
+    }
+  );
+
+  it('creates only one membership for competing additions', async () => {
+    const workspaceId = await createMemberAdditionWorkspace();
+
+    const results = await Promise.all([
+      repository.addMemberForManager(
+        additionUsers.owner,
+        workspaceId,
+        additionUsers.target
+      ),
+      repository.addMemberForManager(
+        additionUsers.admin,
+        workspaceId,
+        additionUsers.target
+      ),
+    ]);
+
+    expect(results.map((result) => result.status).sort()).toEqual([
+      'added',
+      'already_member',
+    ]);
+
+    await expect(
+      prisma.workspaceMember.count({
+        where: {
+          workspaceId,
+          userId: additionUsers.target,
+        },
+      })
+    ).resolves.toBe(1);
+  });
+
+  it.each(['workspace', 'user'] as const)(
+    'returns unavailable when the required %s does not exist',
+    async (missingRecord) => {
+      const workspaceId = await createMemberAdditionWorkspace();
+
+      const result = await repository.addMemberForManager(
+        additionUsers.owner,
+        missingRecord === 'workspace' ? randomUUID() : workspaceId,
+        missingRecord === 'user' ? randomUUID() : additionUsers.target
+      );
+
+      expect(result).toEqual({ status: 'unavailable' });
+
+      await expect(
+        prisma.workspaceMember.count({
+          where: { workspaceId },
+        })
+      ).resolves.toBe(3);
+    }
+  );
+
+  it('rejects member addition after an admin has been demoted', async () => {
+    const workspaceId = await createMemberAdditionWorkspace();
+
+    const earlierLookup = await repository.findForUser(
+      additionUsers.admin,
+      workspaceId
+    );
+
+    expect(earlierLookup?.role).toBe('admin');
+
+    await prisma.workspaceMember.update({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId: additionUsers.admin,
+        },
+      },
+      data: {
+        role: 'member',
+      },
+    });
+
+    await expect(
+      repository.addMemberForManager(
+        additionUsers.admin,
+        workspaceId,
+        additionUsers.target
+      )
+    ).resolves.toEqual({ status: 'unavailable' });
+
+    await expect(
+      prisma.workspaceMember.count({
+        where: {
+          workspaceId,
+          userId: additionUsers.target,
+        },
+      })
+    ).resolves.toBe(0);
   });
 });

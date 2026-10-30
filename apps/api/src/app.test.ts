@@ -1548,3 +1548,337 @@ describe('workspace rename API', () => {
     expect(renameForManager).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('workspace member creation API', () => {
+  const missingWorkspaceId = '00000000-0000-4000-8000-000000000000';
+
+  it('adds a registered user by normalized email and grants workspace access', async () => {
+    const app = createTestApp();
+
+    const owner = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'member-owner@example.com'
+    );
+
+    const target = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'new-member@example.com'
+    );
+
+    const targetMe = await target.get('/api/auth/me').expect(200);
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const workspaceId = created.body.data.id;
+
+    await target.get(`/api/workspaces/${workspaceId}`).expect(404);
+
+    const added = await owner
+      .post(`/api/workspaces/${workspaceId}/members`)
+      .send({ email: '  NEW-MEMBER@example.com  ' })
+      .expect(201);
+
+    expect(added.body).toEqual({
+      data: {
+        id: expect.any(String),
+        userId: targetMe.body.data.id,
+        displayName: targetMe.body.data.displayName,
+        role: 'member',
+        joinedAt: expect.any(String),
+      },
+    });
+
+    const details = await target
+      .get(`/api/workspaces/${workspaceId}`)
+      .expect(200);
+
+    expect(details.body.data).toMatchObject({
+      id: workspaceId,
+      name: 'Product Team',
+      role: 'member',
+    });
+
+    const workspaces = await target.get('/api/workspaces').expect(200);
+
+    expect(workspaces.body.data).toEqual([
+      {
+        ...created.body.data,
+        role: 'member',
+      },
+    ]);
+
+    const roster = await owner
+      .get(`/api/workspaces/${workspaceId}/members`)
+      .expect(200);
+
+    expect(roster.body.data).toHaveLength(2);
+    expect(roster.body.data).toContainEqual(added.body.data);
+  });
+
+  it('rejects duplicate membership without creating another row', async () => {
+    const app = createTestApp();
+    const owner = await authenticatedBrowserRequest(app);
+
+    await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'duplicate-member@example.com'
+    );
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const membersPath = `/api/workspaces/${created.body.data.id}/members`;
+
+    await owner
+      .post(membersPath)
+      .send({ email: 'duplicate-member@example.com' })
+      .expect(201);
+
+    const duplicate = await owner
+      .post(membersPath)
+      .send({ email: 'duplicate-member@example.com' })
+      .expect(409);
+
+    expect(duplicate.body).toEqual({
+      error: {
+        code: 'WORKSPACE_MEMBER_ALREADY_EXISTS',
+        message: 'User is already a member of this workspace',
+      },
+    });
+
+    const roster = await owner.get(membersPath).expect(200);
+
+    expect(roster.body.data).toHaveLength(2);
+  });
+
+  it('rejects regular members before looking up the target email', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+
+    const owner = await authenticatedBrowserRequest(app);
+
+    const member = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'regular-member@example.com'
+    );
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const membersPath = `/api/workspaces/${created.body.data.id}/members`;
+
+    await owner
+      .post(membersPath)
+      .send({ email: 'regular-member@example.com' })
+      .expect(201);
+
+    const findByEmail = vi.spyOn(userRepository, 'findByEmail');
+    const addMember = vi.spyOn(repository, 'addMemberForManager');
+
+    const response = await member
+      .post(membersPath)
+      .send({ email: 'someone-else@example.com' })
+      .expect(403);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'WORKSPACE_FORBIDDEN',
+        message: 'You do not have permission to add workspace members',
+      },
+    });
+
+    expect(findByEmail).not.toHaveBeenCalled();
+    expect(addMember).not.toHaveBeenCalled();
+  });
+
+  it('rejects anonymous membership creation', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app)
+      .post('/api/workspaces/00000000-0000-4000-8000-000000000000/members')
+      .send({ email: 'new-member@example.com' })
+      .expect(401);
+
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+  });
+
+  it('returns 404 when the target email has no registered account', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+    const owner = await authenticatedBrowserRequest(app);
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const addMember = vi.spyOn(repository, 'addMemberForManager');
+
+    const response = await owner
+      .post(`/api/workspaces/${created.body.data.id}/members`)
+      .send({ email: 'missing-account@example.com' })
+      .expect(404);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'USER_NOT_FOUND',
+        message: 'No registered user was found with this email',
+      },
+    });
+
+    expect(addMember).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      caseName: 'a malformed workspace ID',
+      workspaceId: 'not-a-uuid',
+      input: { email: 'target@example.com' },
+    },
+    {
+      caseName: 'a missing email',
+      workspaceId: missingWorkspaceId,
+      input: {},
+    },
+    {
+      caseName: 'a blank email',
+      workspaceId: missingWorkspaceId,
+      input: { email: '   ' },
+    },
+    {
+      caseName: 'an invalid email',
+      workspaceId: missingWorkspaceId,
+      input: { email: 'not-an-email' },
+    },
+    {
+      caseName: 'a client-supplied role',
+      workspaceId: missingWorkspaceId,
+      input: {
+        email: 'target@example.com',
+        role: 'owner',
+      },
+    },
+    {
+      caseName: 'a client-supplied user ID',
+      workspaceId: missingWorkspaceId,
+      input: {
+        email: 'target@example.com',
+        userId: '00000000-0000-4000-8000-000000000001',
+      },
+    },
+  ])(
+    'rejects $caseName before calling storage',
+    async ({ workspaceId, input }) => {
+      const userRepository = new InMemoryUserRepository();
+      const repository = new InMemoryWorkspaceRepository(userRepository);
+      const app = createTestApp(repository, userRepository);
+      const agent = await authenticatedBrowserRequest(app);
+
+      const findForUser = vi.spyOn(repository, 'findForUser');
+      const findByEmail = vi.spyOn(userRepository, 'findByEmail');
+      const addMember = vi.spyOn(repository, 'addMemberForManager');
+
+      const response = await agent
+        .post(`/api/workspaces/${workspaceId}/members`)
+        .send(input)
+        .expect(400);
+
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
+      expect(findForUser).not.toHaveBeenCalled();
+      expect(findByEmail).not.toHaveBeenCalled();
+      expect(addMember).not.toHaveBeenCalled();
+    }
+  );
+
+  it('returns the same 404 for inaccessible and missing workspaces', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+
+    const owner = await authenticatedBrowserRequest(app);
+
+    const outsider = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'members-outsider@example.com'
+    );
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Private Team' })
+      .expect(201);
+
+    const findByEmail = vi.spyOn(userRepository, 'findByEmail');
+    const addMember = vi.spyOn(repository, 'addMemberForManager');
+
+    const inaccessible = await outsider
+      .post(`/api/workspaces/${created.body.data.id}/members`)
+      .send({ email: 'target@example.com' })
+      .expect(404);
+
+    const missing = await outsider
+      .post(`/api/workspaces/${missingWorkspaceId}/members`)
+      .send({ email: 'target@example.com' })
+      .expect(404);
+
+    expect(inaccessible.body).toEqual({
+      error: {
+        code: 'WORKSPACE_NOT_FOUND',
+        message: 'Workspace not found',
+      },
+    });
+
+    expect(missing.body).toEqual(inaccessible.body);
+    expect(findByEmail).not.toHaveBeenCalled();
+    expect(addMember).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the required connections are no longer available', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+    const owner = await authenticatedBrowserRequest(app);
+
+    await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'unavailable-member@example.com'
+    );
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Product Team' })
+      .expect(201);
+
+    const addMember = vi
+      .spyOn(repository, 'addMemberForManager')
+      .mockResolvedValueOnce({ status: 'unavailable' });
+
+    const response = await owner
+      .post(`/api/workspaces/${created.body.data.id}/members`)
+      .send({ email: 'unavailable-member@example.com' })
+      .expect(404);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'MEMBERSHIP_UNAVAILABLE',
+        message: 'Workspace or user is no longer available for this operation',
+      },
+    });
+
+    expect(addMember).toHaveBeenCalledTimes(1);
+  });
+});

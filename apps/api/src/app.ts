@@ -76,7 +76,10 @@ export function createApp({
     secureSessionCookie,
   });
 
-  const workspaceService = new WorkspaceService(workspaceRepository);
+  const workspaceService = new WorkspaceService(
+    workspaceRepository,
+    userRepository
+  );
   const workspaceController = new WorkspaceController(workspaceService);
 
   const authenticate = requireAuth(authService);

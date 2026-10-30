@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 
 import { AppError } from '../../lib/errors/app-error.ts';
 import {
+  addWorkspaceMemberSchema,
   createWorkspaceSchema,
   listWorkspaceMembersQuerySchema,
   listWorkspacesQuerySchema,
@@ -102,6 +103,27 @@ export class WorkspaceController {
 
     response.status(200).json({
       data: workspace,
+    });
+  };
+
+  addMember = async (request: Request, response: Response) => {
+    const user = request.user;
+
+    if (user === undefined) {
+      throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
+    }
+
+    const { workspaceId } = workspaceParamsSchema.parse(request.params);
+    const input = addWorkspaceMemberSchema.parse(request.body);
+
+    const member = await this.service.addWorkspaceMember(
+      user.id,
+      workspaceId,
+      input
+    );
+
+    response.status(201).json({
+      data: member,
     });
   };
 }

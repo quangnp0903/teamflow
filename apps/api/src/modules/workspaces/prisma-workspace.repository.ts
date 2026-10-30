@@ -1,6 +1,7 @@
-import type {
-  PrismaClient,
-  Workspace as PrismaWorkspace,
+import {
+  Prisma,
+  type PrismaClient,
+  type Workspace as PrismaWorkspace,
 } from '../../generated/prisma/client.ts';
 
 import type {
@@ -10,6 +11,7 @@ import type {
 } from './workspace.model.ts';
 import { WORKSPACE_MANAGER_ROLES } from './workspace.permission.ts';
 import type {
+  AddWorkspaceMemberResult,
   CreateWorkspaceRecord,
   RenameWorkspaceRecord,
   WorkspaceRepository,
@@ -179,5 +181,71 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     });
 
     return workspace === undefined ? null : toWorkspace(workspace);
+  }
+
+  async addMemberForManager(
+    requesterId: string,
+    workspaceId: string,
+    targetUserId: string
+  ): Promise<AddWorkspaceMemberResult> {
+    try {
+      const membership = await this.client.workspaceMember.create({
+        data: {
+          role: 'member',
+          workspace: {
+            connect: {
+              id: workspaceId,
+              members: {
+                some: {
+                  userId: requesterId,
+                  role: {
+                    in: [...WORKSPACE_MANAGER_ROLES],
+                  },
+                },
+              },
+            },
+          },
+          user: {
+            connect: {
+              id: targetUserId,
+            },
+          },
+        },
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          createdAt: true,
+          user: {
+            select: {
+              displayName: true,
+            },
+          },
+        },
+      });
+
+      return {
+        status: 'added',
+        member: {
+          id: membership.id,
+          userId: membership.userId,
+          displayName: membership.user.displayName,
+          role: membership.role,
+          joinedAt: membership.createdAt.toISOString(),
+        },
+      };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          return { status: 'already_member' };
+        }
+
+        if (error.code === 'P2025') {
+          return { status: 'unavailable' };
+        }
+      }
+
+      throw error;
+    }
   }
 }

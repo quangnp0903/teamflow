@@ -7,6 +7,7 @@ import type {
   WorkspaceWithRole,
 } from './workspace.model.ts';
 import type {
+  AddWorkspaceMemberResult,
   CreateWorkspaceRecord,
   RenameWorkspaceRecord,
   WorkspaceRepository,
@@ -185,5 +186,62 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     this.workspaces[index] = updatedWorkspace;
 
     return updatedWorkspace;
+  }
+
+  async addMemberForManager(
+    requesterId: string,
+    workspaceId: string,
+    targetUserId: string
+  ): Promise<AddWorkspaceMemberResult> {
+    const targetUser = await this.userRepository.findById(targetUserId);
+
+    const workspaceExists = this.workspaces.some(
+      (workspace) => workspace.id === workspaceId
+    );
+
+    const hasPermission = this.members.some(
+      (membership) =>
+        membership.workspaceId === workspaceId &&
+        membership.userId === requesterId &&
+        canManageWorkspace(membership.role)
+    );
+
+    if (targetUser === null || !workspaceExists || !hasPermission) {
+      return { status: 'unavailable' };
+    }
+
+    const alreadyMember = this.members.some(
+      (membership) =>
+        membership.workspaceId === workspaceId &&
+        membership.userId === targetUserId
+    );
+
+    if (alreadyMember) {
+      return { status: 'already_member' };
+    }
+
+    const now = new Date().toISOString();
+
+    const membership: WorkspaceMember = {
+      id: randomUUID(),
+      workspaceId,
+      userId: targetUserId,
+      role: 'member',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.members.push(membership);
+
+    return {
+      status: 'added',
+      member: {
+        id: membership.id,
+        userId: membership.userId,
+        displayName: targetUser.displayName,
+        role: membership.role,
+        joinedAt: membership.createdAt,
+      },
+    };
   }
 }
