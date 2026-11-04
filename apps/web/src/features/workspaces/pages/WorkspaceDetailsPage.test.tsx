@@ -14,6 +14,7 @@ import {
   getWorkspace,
   listWorkspaceMembers,
   renameWorkspace,
+  addWorkspaceMember,
 } from '../api/workspace.api';
 import { workspaceRoutes } from '../workspace.routes';
 import type {
@@ -28,11 +29,13 @@ vi.mock('../api/workspace.api', () => ({
   createWorkspace: vi.fn(),
   listWorkspaceMembers: vi.fn(),
   renameWorkspace: vi.fn(),
+  addWorkspaceMember: vi.fn(),
 }));
 
 const getWorkspaceMock = vi.mocked(getWorkspace);
 const listWorkspaceMembersMock = vi.mocked(listWorkspaceMembers);
 const renameWorkspaceMock = vi.mocked(renameWorkspace);
+const addWorkspaceMemberMock = vi.mocked(addWorkspaceMember);
 
 const TEST_WORKSPACE = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -111,10 +114,34 @@ function renderWorkspaceDetails(workspaceId = TEST_WORKSPACE.id) {
   return { router, ...view };
 }
 
+const ADDED_MEMBER = {
+  id: '00000000-0000-4000-8000-000000000013',
+  userId: '00000000-0000-4000-8000-000000000005',
+  displayName: 'Carol',
+  role: 'member',
+  joinedAt: '2026-11-03T10:00:00.000Z',
+} satisfies WorkspaceMemberSummary;
+
+async function renderMemberForm(role: 'owner' | 'admin' = 'owner') {
+  getWorkspaceMock.mockResolvedValue({
+    ...TEST_WORKSPACE,
+    role,
+  });
+
+  listWorkspaceMembersMock.mockResolvedValue(TEST_MEMBERS);
+
+  renderWorkspaceDetails();
+
+  return screen.findByRole('form', {
+    name: 'Add a member',
+  });
+}
+
 beforeEach(() => {
   getWorkspaceMock.mockReset();
   listWorkspaceMembersMock.mockReset().mockResolvedValue([]);
   renameWorkspaceMock.mockReset();
+  addWorkspaceMemberMock.mockReset();
 });
 
 afterEach(() => {
@@ -474,5 +501,133 @@ describe('WorkspaceDetailsPage', () => {
     expect(renameWorkspaceMock).toHaveBeenLastCalledWith(TEST_WORKSPACE.id, {
       name: 'Platform team',
     });
+  });
+
+  it.each(['owner', 'admin'] as const)(
+    'lets an %s add a member and updates the roster',
+    async (role) => {
+      const user = userEvent.setup();
+
+      addWorkspaceMemberMock.mockResolvedValue(ADDED_MEMBER);
+
+      const form = await renderMemberForm(role);
+      const emailInput = within(form).getByRole('textbox', {
+        name: 'Member email',
+      });
+
+      await user.type(emailInput, '  CAROL@EXAMPLE.COM  ');
+      await user.click(
+        within(form).getByRole('button', { name: 'Add member' })
+      );
+
+      expect(await within(form).findByRole('status')).toHaveTextContent(
+        'Member added.'
+      );
+
+      expect(addWorkspaceMemberMock).toHaveBeenCalledOnce();
+      expect(addWorkspaceMemberMock).toHaveBeenCalledWith(TEST_WORKSPACE.id, {
+        email: 'carol@example.com',
+      });
+
+      expect(emailInput).toHaveValue('');
+
+      const roster = screen.getByRole('list', {
+        name: 'Workspace members',
+      });
+
+      expect(within(roster).getAllByRole('listitem')).toHaveLength(3);
+      expect(within(roster).getByText('Alice')).toBeInTheDocument();
+      expect(within(roster).getByText('Bob')).toBeInTheDocument();
+      expect(within(roster).getByText('Carol')).toBeInTheDocument();
+    }
+  );
+
+  it('hides the add-member form from regular members', async () => {
+    getWorkspaceMock.mockResolvedValue(TEST_WORKSPACE);
+    listWorkspaceMembersMock.mockResolvedValue(TEST_MEMBERS);
+
+    renderWorkspaceDetails();
+
+    await screen.findByRole('list', {
+      name: 'Workspace members',
+    });
+
+    expect(
+      screen.queryByRole('form', { name: 'Add a member' })
+    ).not.toBeInTheDocument();
+
+    expect(addWorkspaceMemberMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves the email and roster after failure and allows retry', async () => {
+    const user = userEvent.setup();
+
+    addWorkspaceMemberMock
+      .mockRejectedValueOnce(new Error('Network unavailable'))
+      .mockResolvedValueOnce(ADDED_MEMBER);
+
+    const form = await renderMemberForm();
+    const emailInput = within(form).getByRole('textbox', {
+      name: 'Member email',
+    });
+    const addButton = within(form).getByRole('button', {
+      name: 'Add member',
+    });
+
+    await user.type(emailInput, 'carol@example.com');
+    await user.click(addButton);
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      'Network unavailable'
+    );
+
+    expect(emailInput).toHaveValue('carol@example.com');
+
+    const roster = screen.getByRole('list', {
+      name: 'Workspace members',
+    });
+
+    expect(within(roster).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(roster).queryByText('Carol')).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(addButton).toBeEnabled();
+    });
+
+    await user.click(addButton);
+
+    expect(await within(form).findByRole('status')).toHaveTextContent(
+      'Member added.'
+    );
+
+    expect(within(form).queryByRole('alert')).not.toBeInTheDocument();
+    expect(emailInput).toHaveValue('');
+    expect(within(roster).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(roster).getByText('Carol')).toBeInTheDocument();
+
+    expect(addWorkspaceMemberMock).toHaveBeenCalledTimes(2);
+    expect(addWorkspaceMemberMock).toHaveBeenLastCalledWith(TEST_WORKSPACE.id, {
+      email: 'carol@example.com',
+    });
+  });
+
+  it('rejects an invalid email before calling the API', async () => {
+    const user = userEvent.setup();
+
+    const form = await renderMemberForm();
+    const emailInput = within(form).getByRole('textbox', {
+      name: 'Member email',
+    });
+
+    await user.type(emailInput, 'not-an-email');
+    await user.click(within(form).getByRole('button', { name: 'Add member' }));
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      'Enter a valid email address'
+    );
+
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(emailInput).toHaveValue('not-an-email');
+    expect(addWorkspaceMemberMock).not.toHaveBeenCalled();
   });
 });

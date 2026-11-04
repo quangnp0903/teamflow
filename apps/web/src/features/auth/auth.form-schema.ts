@@ -1,14 +1,6 @@
 import { z } from 'zod';
 
-const emailFieldSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .pipe(
-    z
-      .email({ error: 'Enter a valid email address' })
-      .max(254, { error: 'Email must not exceed 254 characters' })
-  );
+import { emailFieldSchema } from 'src/lib/validation/email.schema';
 
 const passwordFieldSchema = z
   .string()

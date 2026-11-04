@@ -2,17 +2,23 @@ import type { FC } from 'react';
 
 import useWorkspaceMembers from '../../hooks/useWorkspaceMembers';
 import { WORKSPACE_ROLE_LABELS } from '../../workspace.constants';
+import type { WorkspaceRole } from '../../workspace.types';
+import AddWorkspaceMemberForm from '../AddWorkspaceMemberForm/AddWorkspaceMemberForm';
 import styles from './WorkspaceMembersPanel.module.css';
 
 type WorkspaceMembersPanelProps = Readonly<{
   workspaceId: string;
+  requesterRole: WorkspaceRole;
 }>;
 
 const WorkspaceMembersPanel: FC<WorkspaceMembersPanelProps> = ({
   workspaceId,
+  requesterRole,
 }) => {
-  const { state, retry } = useWorkspaceMembers(workspaceId);
-  
+  const { state, retry, addMember } = useWorkspaceMembers(workspaceId);
+
+  const canAddMembers = requesterRole === 'owner' || requesterRole === 'admin';
+
   return (
     <section
       className={styles.panel}
@@ -71,6 +77,7 @@ const WorkspaceMembersPanel: FC<WorkspaceMembersPanelProps> = ({
               ))}
             </ul>
           )}
+          {canAddMembers && <AddWorkspaceMemberForm onAdd={addMember} />}
         </>
       )}
     </section>

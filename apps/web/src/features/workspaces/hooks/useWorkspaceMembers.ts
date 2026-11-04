@@ -2,8 +2,14 @@ import { useEffect, useState } from 'react';
 
 import { ApiError } from 'src/lib/http';
 
-import type { WorkspaceMemberSummary } from '../workspace.types';
-import { listWorkspaceMembers } from '../api/workspace.api';
+import type {
+  AddWorkspaceMemberInput,
+  WorkspaceMemberSummary,
+} from '../workspace.types';
+import {
+  listWorkspaceMembers,
+  addWorkspaceMember as addWorkspaceMemberRequest,
+} from '../api/workspace.api';
 
 type WorkspaceMembersState =
   | Readonly<{ status: 'loading' }>
@@ -26,6 +32,31 @@ function useWorkspaceMembers(workspaceId: string) {
   function retry(): void {
     setState({ status: 'loading' });
     setRefreshVersion((currentVersion) => currentVersion + 1);
+  }
+
+  async function addMember(input: AddWorkspaceMemberInput): Promise<void> {
+    const member = await addWorkspaceMemberRequest(workspaceId, input);
+
+    setState((currentState) => {
+      if (currentState.status !== 'success') {
+        return currentState;
+      }
+
+      const members = [...currentState.members, member].sort(
+        (first, second) => {
+          const dateComparison = first.joinedAt.localeCompare(second.joinedAt);
+
+          return dateComparison !== 0
+            ? dateComparison
+            : first.id.localeCompare(second.id);
+        }
+      );
+
+      return {
+        status: 'success',
+        members,
+      };
+    });
   }
 
   useEffect(() => {
@@ -73,7 +104,7 @@ function useWorkspaceMembers(workspaceId: string) {
     };
   }, [workspaceId, refreshVersion]);
 
-  return { state, retry };
+  return { state, retry, addMember };
 }
 
 export default useWorkspaceMembers;

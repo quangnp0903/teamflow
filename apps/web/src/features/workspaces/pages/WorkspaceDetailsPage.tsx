@@ -83,7 +83,10 @@ const WorkspaceDetails: FC<WorkspaceDetailsProps> = ({ workspaceId }) => {
         )}
       </section>
       {state.status === 'success' && (
-        <WorkspaceMembersPanel workspaceId={state.workspace.id} />
+        <WorkspaceMembersPanel
+          workspaceId={state.workspace.id}
+          requesterRole={state.workspace.role}
+        />
       )}
       {state.status === 'success' &&
         (state.workspace.role === 'owner' ||

@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import type { RenameWorkspaceInput } from './workspace.types';
+import type {
+  RenameWorkspaceInput,
+  AddWorkspaceMemberInput,
+} from './workspace.types';
+import { emailFieldSchema } from 'src/lib/validation/email.schema';
 
 const workspaceNameFieldSchema = z
   .string()
@@ -26,4 +30,12 @@ export const renameWorkspaceFormSchema = z.object({
 
 export type RenameWorkspaceFormValues = z.infer<
   typeof renameWorkspaceFormSchema
+>;
+
+export const addWorkspaceMemberFormSchema = z.object({
+  email: emailFieldSchema,
+}) satisfies z.ZodType<AddWorkspaceMemberInput>;
+
+export type AddWorkspaceMemberFormValues = z.infer<
+  typeof addWorkspaceMemberFormSchema
 >;
