@@ -2,6 +2,14 @@ export const WORKSPACE_ROLES = ['owner', 'admin', 'member'] as const;
 
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
+export const ASSIGNABLE_WORKSPACE_ROLES = [
+  'admin',
+  'member',
+] as const satisfies readonly WorkspaceRole[];
+
+export type AssignableWorkspaceRole =
+  (typeof ASSIGNABLE_WORKSPACE_ROLES)[number];
+
 export type Workspace = Readonly<{
   id: string;
   name: string;
@@ -26,4 +34,8 @@ export type RenameWorkspaceInput = Pick<Workspace, 'name'>;
 
 export type AddWorkspaceMemberInput = Readonly<{
   email: string;
+}>;
+
+export type UpdateWorkspaceMemberRoleInput = Readonly<{
+  role: AssignableWorkspaceRole;
 }>;

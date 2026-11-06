@@ -8,3 +8,7 @@ export const WORKSPACE_MANAGER_ROLES = [
 export function canManageWorkspace(role: WorkspaceRole): boolean {
   return WORKSPACE_MANAGER_ROLES.some((allowedRole) => allowedRole === role);
 }
+
+export function canChangeWorkspaceMemberRoles(role: WorkspaceRole): boolean {
+  return role === 'owner';
+}

@@ -1,6 +1,8 @@
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { WorkspaceMemberSummary } from '@teamflow/contracts/workspaces';
+
 import { InMemoryTaskRepository } from './modules/tasks/in-memory-task.repository.ts';
 import { FakePasswordHasher } from './modules/auth/fake-password-hasher.ts';
 import { InMemoryUserRepository } from './modules/users/in-memory-user.repository.ts';
@@ -1880,5 +1882,227 @@ describe('workspace member creation API', () => {
     });
 
     expect(addMember).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('workspace member role API', () => {
+  const missingId = '00000000-0000-4000-8000-000000000001';
+  const samplePath = `/api/workspaces/${missingId}/members/${missingId}`;
+
+  async function createRoleChangeFixture() {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+
+    const owner = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'role-owner@example.com'
+    );
+
+    const member = await authenticatedBrowserRequest(
+      app,
+      TEST_ORIGIN,
+      'role-member@example.com'
+    );
+
+    const created = await owner
+      .post('/api/workspaces')
+      .send({ name: 'Role Management Team' })
+      .expect(201);
+
+    const workspaceId: string = created.body.data.id;
+
+    const added = await owner
+      .post(`/api/workspaces/${workspaceId}/members`)
+      .send({ email: 'role-member@example.com' })
+      .expect(201);
+
+    const membership: WorkspaceMemberSummary = added.body.data;
+
+    return {
+      app,
+      repository,
+      owner,
+      member,
+      workspaceId,
+      membership,
+    };
+  }
+
+  it('promotes and demotes a member with the same session', async () => {
+    const fixture = await createRoleChangeFixture();
+
+    const memberPath =
+      `/api/workspaces/${fixture.workspaceId}/members/` + fixture.membership.id;
+
+    const promoted = await fixture.owner
+      .patch(memberPath)
+      .send({ role: 'admin' })
+      .expect(200);
+
+    expect(promoted.body).toEqual({
+      data: {
+        ...fixture.membership,
+        role: 'admin',
+      },
+    });
+
+    // The existing member session now has admin permissions.
+    await fixture.member
+      .patch(`/api/workspaces/${fixture.workspaceId}`)
+      .send({ name: 'Renamed by admin' })
+      .expect(200);
+
+    const demoted = await fixture.owner
+      .patch(memberPath)
+      .send({ role: 'member' })
+      .expect(200);
+
+    expect(demoted.body).toEqual({
+      data: fixture.membership,
+    });
+
+    // The same session loses admin permissions after demotion.
+    await fixture.member
+      .patch(`/api/workspaces/${fixture.workspaceId}`)
+      .send({ name: 'Should be rejected' })
+      .expect(403);
+  });
+
+  it.each(['member', 'admin'] as const)(
+    'rejects role changes requested by an %s',
+    async (role) => {
+      const fixture = await createRoleChangeFixture();
+
+      const memberPath =
+        `/api/workspaces/${fixture.workspaceId}/members/` +
+        fixture.membership.id;
+
+      if (role === 'admin') {
+        await fixture.owner
+          .patch(memberPath)
+          .send({ role: 'admin' })
+          .expect(200);
+      }
+
+      const updateRole = vi.spyOn(
+        fixture.repository,
+        'updateMemberRoleForOwner'
+      );
+
+      const response = await fixture.member
+        .patch(memberPath)
+        .send({ role: role === 'member' ? 'admin' : 'member' })
+        .expect(403);
+
+      expect(response.body.error.code).toBe('WORKSPACE_FORBIDDEN');
+      expect(updateRole).not.toHaveBeenCalled();
+    }
+  );
+
+  it('rejects anonymous role changes', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app)
+      .patch(samplePath)
+      .send({ role: 'admin' })
+      .expect(401);
+
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+  });
+
+  it.each([
+    {
+      caseName: 'a malformed workspace ID',
+      path: `/api/workspaces/not-a-uuid/members/${missingId}`,
+      input: { role: 'admin' },
+    },
+    {
+      caseName: 'a malformed membership ID',
+      path: `/api/workspaces/${missingId}/members/not-a-uuid`,
+      input: { role: 'admin' },
+    },
+    {
+      caseName: 'a missing role',
+      path: samplePath,
+      input: {},
+    },
+    {
+      caseName: 'the owner role',
+      path: samplePath,
+      input: { role: 'owner' },
+    },
+    {
+      caseName: 'a client-supplied requester ID',
+      path: samplePath,
+      input: {
+        role: 'admin',
+        requesterId: missingId,
+      },
+    },
+  ])('rejects $caseName before calling storage', async ({ path, input }) => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+    const app = createTestApp(repository, userRepository);
+    const owner = await authenticatedBrowserRequest(app);
+
+    const findForUser = vi.spyOn(repository, 'findForUser');
+    const updateRole = vi.spyOn(repository, 'updateMemberRoleForOwner');
+
+    const response = await owner.patch(path).send(input).expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(findForUser).not.toHaveBeenCalled();
+    expect(updateRole).not.toHaveBeenCalled();
+  });
+
+  it('returns the same 404 for inaccessible and missing workspaces', async () => {
+    const fixture = await createRoleChangeFixture();
+
+    const outsider = await authenticatedBrowserRequest(
+      fixture.app,
+      TEST_ORIGIN,
+      'role-outsider@example.com'
+    );
+
+    const updateRole = vi.spyOn(fixture.repository, 'updateMemberRoleForOwner');
+
+    for (const workspaceId of [fixture.workspaceId, missingId]) {
+      const response = await outsider
+        .patch(
+          `/api/workspaces/${workspaceId}/members/` + fixture.membership.id
+        )
+        .send({ role: 'admin' })
+        .expect(404);
+
+      expect(response.body).toEqual({
+        error: {
+          code: 'WORKSPACE_NOT_FOUND',
+          message: 'Workspace not found',
+        },
+      });
+    }
+
+    expect(updateRole).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the guarded write no longer matches', async () => {
+    const fixture = await createRoleChangeFixture();
+
+    const updateRole = vi
+      .spyOn(fixture.repository, 'updateMemberRoleForOwner')
+      .mockResolvedValueOnce(null);
+
+    const response = await fixture.owner
+      .patch(
+        `/api/workspaces/${fixture.workspaceId}/members/` +
+          fixture.membership.id
+      )
+      .send({ role: 'admin' })
+      .expect(404);
+
+    expect(response.body.error.code).toBe('MEMBERSHIP_UNAVAILABLE');
+    expect(updateRole).toHaveBeenCalledOnce();
   });
 });

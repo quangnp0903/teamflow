@@ -1,4 +1,9 @@
 import {
+  ASSIGNABLE_WORKSPACE_ROLES,
+  type UpdateWorkspaceMemberRoleInput,
+} from '@teamflow/contracts/workspaces';
+
+import {
   Prisma,
   type PrismaClient,
   type Workspace as PrismaWorkspace,
@@ -247,5 +252,56 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
 
       throw error;
     }
+  }
+
+  async updateMemberRoleForOwner(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string,
+    input: UpdateWorkspaceMemberRoleInput
+  ): Promise<WorkspaceMemberSummary | null> {
+    const [membership] = await this.client.workspaceMember.updateManyAndReturn({
+      where: {
+        id: memberId,
+        workspaceId,
+        role: {
+          in: [...ASSIGNABLE_WORKSPACE_ROLES],
+        },
+        workspace: {
+          members: {
+            some: {
+              userId: requesterId,
+              role: 'owner',
+            },
+          },
+        },
+      },
+      data: {
+        role: input.role,
+      },
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        createdAt: true,
+        user: {
+          select: {
+            displayName: true,
+          },
+        },
+      },
+    });
+
+    if (membership === undefined) {
+      return null;
+    }
+
+    return {
+      id: membership.id,
+      userId: membership.userId,
+      displayName: membership.user.displayName,
+      role: membership.role,
+      joinedAt: membership.createdAt.toISOString(),
+    };
   }
 }

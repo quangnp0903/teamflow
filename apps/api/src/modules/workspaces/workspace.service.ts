@@ -1,6 +1,7 @@
 import type {
   AddWorkspaceMemberInput,
   RenameWorkspaceInput,
+  UpdateWorkspaceMemberRoleInput,
 } from '@teamflow/contracts/workspaces';
 
 import type {
@@ -11,7 +12,10 @@ import type {
 import type { WorkspaceRepository } from './workspace.repository.ts';
 import type { CreateWorkspaceInput } from './workspace.schema.ts';
 import { AppError } from '../../lib/errors/app-error.ts';
-import { canManageWorkspace } from './workspace.permission.ts';
+import {
+  canManageWorkspace,
+  canChangeWorkspaceMemberRoles,
+} from './workspace.permission.ts';
 import type { UserRepository } from '../users/user.repository.ts';
 
 export class WorkspaceService {
@@ -145,5 +149,39 @@ export class WorkspaceService {
     }
 
     return result.member;
+  }
+
+  async updateWorkspaceMemberRole(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string,
+    input: UpdateWorkspaceMemberRoleInput
+  ): Promise<WorkspaceMemberSummary> {
+    const workspace = await this.getWorkspaceById(requesterId, workspaceId);
+
+    if (!canChangeWorkspaceMemberRoles(workspace.role)) {
+      throw new AppError(
+        403,
+        'WORKSPACE_FORBIDDEN',
+        'Only workspace owners can change member roles'
+      );
+    }
+
+    const member = await this.repository.updateMemberRoleForOwner(
+      requesterId,
+      workspaceId,
+      memberId,
+      { role: input.role }
+    );
+
+    if (member === null) {
+      throw new AppError(
+        404,
+        'MEMBERSHIP_UNAVAILABLE',
+        'Workspace member is not available for this operation'
+      );
+    }
+
+    return member;
   }
 }

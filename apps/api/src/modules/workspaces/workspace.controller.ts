@@ -7,6 +7,8 @@ import {
   listWorkspaceMembersQuerySchema,
   listWorkspacesQuerySchema,
   renameWorkspaceSchema,
+  updateWorkspaceMemberRoleSchema,
+  workspaceMemberParamsSchema,
   workspaceParamsSchema,
 } from './workspace.schema.ts';
 import type { WorkspaceService } from './workspace.service.ts';
@@ -123,6 +125,31 @@ export class WorkspaceController {
     );
 
     response.status(201).json({
+      data: member,
+    });
+  };
+
+  updateMemberRole = async (request: Request, response: Response) => {
+    const user = request.user;
+
+    if (user === undefined) {
+      throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
+    }
+
+    const { workspaceId, memberId } = workspaceMemberParamsSchema.parse(
+      request.params
+    );
+
+    const input = updateWorkspaceMemberRoleSchema.parse(request.body);
+
+    const member = await this.service.updateWorkspaceMemberRole(
+      user.id,
+      workspaceId,
+      memberId,
+      input
+    );
+
+    response.status(200).json({
       data: member,
     });
   };

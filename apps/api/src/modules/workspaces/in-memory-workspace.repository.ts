@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import {
+  ASSIGNABLE_WORKSPACE_ROLES,
+  type UpdateWorkspaceMemberRoleInput,
+} from '@teamflow/contracts/workspaces';
+
 import type {
   Workspace,
   WorkspaceMember,
@@ -13,7 +18,10 @@ import type {
   WorkspaceRepository,
 } from './workspace.repository.ts';
 import type { UserRepository } from '../users/user.repository.ts';
-import { canManageWorkspace } from './workspace.permission.ts';
+import {
+  canManageWorkspace,
+  canChangeWorkspaceMemberRoles,
+} from './workspace.permission.ts';
 
 export class InMemoryWorkspaceRepository implements WorkspaceRepository {
   private readonly workspaces: Workspace[] = [];
@@ -242,6 +250,70 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
         role: membership.role,
         joinedAt: membership.createdAt,
       },
+    };
+  }
+
+  async updateMemberRoleForOwner(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string,
+    input: UpdateWorkspaceMemberRoleInput
+  ): Promise<WorkspaceMemberSummary | null> {
+    const targetMembership = this.members.find(
+      (membership) =>
+        membership.id === memberId && membership.workspaceId === workspaceId
+    );
+
+    if (targetMembership === undefined) {
+      return null;
+    }
+
+    const targetUser = await this.userRepository.findById(
+      targetMembership.userId
+    );
+
+    const workspaceExists = this.workspaces.some(
+      (workspace) => workspace.id === workspaceId
+    );
+
+    const hasPermission = this.members.some(
+      (membership) =>
+        membership.workspaceId === workspaceId &&
+        membership.userId === requesterId &&
+        canChangeWorkspaceMemberRoles(membership.role)
+    );
+
+    const index = this.members.findIndex(
+      (membership) =>
+        membership.id === memberId &&
+        membership.workspaceId === workspaceId &&
+        ASSIGNABLE_WORKSPACE_ROLES.some((role) => role === membership.role)
+    );
+
+    const currentMembership = this.members[index];
+
+    if (!workspaceExists || !hasPermission || currentMembership === undefined) {
+      return null;
+    }
+
+    if (targetUser === null) {
+      throw new Error('Workspace membership references a missing user');
+    }
+
+    const updatedMembership: WorkspaceMember = {
+      ...currentMembership,
+      role: input.role,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.members[index] = updatedMembership;
+
+    return {
+      id: updatedMembership.id,
+      userId: updatedMembership.userId,
+      displayName: targetUser.displayName,
+      role: updatedMembership.role,
+      joinedAt: updatedMembership.createdAt,
     };
   }
 }

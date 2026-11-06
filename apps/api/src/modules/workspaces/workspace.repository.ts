@@ -1,3 +1,5 @@
+import type { UpdateWorkspaceMemberRoleInput } from '@teamflow/contracts/workspaces';
+
 import type {
   Workspace,
   WorkspaceMemberSummary,
@@ -62,4 +64,15 @@ export interface WorkspaceRepository {
     workspaceId: string,
     targetUserId: string
   ): Promise<AddWorkspaceMemberResult>;
+
+  /**
+   * Changes an admin/member role when the requester owns the workspace.
+   * Returns null when no membership matches that permission scope.
+   */
+  updateMemberRoleForOwner(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string,
+    input: UpdateWorkspaceMemberRoleInput
+  ): Promise<WorkspaceMemberSummary | null>;
 }
