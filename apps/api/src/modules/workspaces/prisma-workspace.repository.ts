@@ -14,7 +14,10 @@ import type {
   WorkspaceMemberSummary,
   WorkspaceWithRole,
 } from './workspace.model.ts';
-import { WORKSPACE_MANAGER_ROLES } from './workspace.permission.ts';
+import {
+  REMOVABLE_WORKSPACE_ROLES,
+  WORKSPACE_MANAGER_ROLES,
+} from './workspace.permission.ts';
 import type {
   AddWorkspaceMemberResult,
   CreateWorkspaceRecord,
@@ -303,5 +306,31 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       role: membership.role,
       joinedAt: membership.createdAt.toISOString(),
     };
+  }
+
+  async removeMemberForOwner(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string
+  ): Promise<boolean> {
+    const result = await this.client.workspaceMember.deleteMany({
+      where: {
+        id: memberId,
+        workspaceId,
+        role: {
+          in: [...REMOVABLE_WORKSPACE_ROLES],
+        },
+        workspace: {
+          members: {
+            some: {
+              userId: requesterId,
+              role: 'owner',
+            },
+          },
+        },
+      },
+    });
+
+    return result.count === 1;
   }
 }

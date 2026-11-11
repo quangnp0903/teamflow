@@ -153,4 +153,20 @@ export class WorkspaceController {
       data: member,
     });
   };
+
+  removeMember = async (request: Request, response: Response) => {
+    const user = request.user;
+
+    if (user === undefined) {
+      throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
+    }
+
+    const { workspaceId, memberId } = workspaceMemberParamsSchema.parse(
+      request.params
+    );
+
+    await this.service.removeWorkspaceMember(user.id, workspaceId, memberId);
+
+    response.status(204).send();
+  };
 }

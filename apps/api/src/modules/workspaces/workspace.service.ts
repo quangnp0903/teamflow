@@ -15,6 +15,7 @@ import { AppError } from '../../lib/errors/app-error.ts';
 import {
   canManageWorkspace,
   canChangeWorkspaceMemberRoles,
+  canRemoveWorkspaceMembers,
 } from './workspace.permission.ts';
 import type { UserRepository } from '../users/user.repository.ts';
 
@@ -183,5 +184,35 @@ export class WorkspaceService {
     }
 
     return member;
+  }
+
+  async removeWorkspaceMember(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string
+  ): Promise<void> {
+    const workspace = await this.getWorkspaceById(requesterId, workspaceId);
+
+    if (!canRemoveWorkspaceMembers(workspace.role)) {
+      throw new AppError(
+        403,
+        'WORKSPACE_FORBIDDEN',
+        'Only workspace owners can remove members'
+      );
+    }
+
+    const removed = await this.repository.removeMemberForOwner(
+      requesterId,
+      workspaceId,
+      memberId
+    );
+
+    if (!removed) {
+      throw new AppError(
+        404,
+        'MEMBERSHIP_UNAVAILABLE',
+        'Workspace member is not available for this operation'
+      );
+    }
   }
 }

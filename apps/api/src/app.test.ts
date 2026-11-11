@@ -69,6 +69,47 @@ async function authenticatedBrowserRequest(
   return agent;
 }
 
+async function createWorkspaceMembershipFixture() {
+  const userRepository = new InMemoryUserRepository();
+  const repository = new InMemoryWorkspaceRepository(userRepository);
+  const app = createTestApp(repository, userRepository);
+
+  const owner = await authenticatedBrowserRequest(
+    app,
+    TEST_ORIGIN,
+    'role-owner@example.com'
+  );
+
+  const member = await authenticatedBrowserRequest(
+    app,
+    TEST_ORIGIN,
+    'role-member@example.com'
+  );
+
+  const created = await owner
+    .post('/api/workspaces')
+    .send({ name: 'Role Management Team' })
+    .expect(201);
+
+  const workspaceId: string = created.body.data.id;
+
+  const added = await owner
+    .post(`/api/workspaces/${workspaceId}/members`)
+    .send({ email: 'role-member@example.com' })
+    .expect(201);
+
+  const membership: WorkspaceMemberSummary = added.body.data;
+
+  return {
+    app,
+    repository,
+    owner,
+    member,
+    workspaceId,
+    membership,
+  };
+}
+
 describe('task API authentication', () => {
   const taskPath = '/api/tasks/00000000-0000-4000-8000-000000000000';
 
@@ -1889,49 +1930,8 @@ describe('workspace member role API', () => {
   const missingId = '00000000-0000-4000-8000-000000000001';
   const samplePath = `/api/workspaces/${missingId}/members/${missingId}`;
 
-  async function createRoleChangeFixture() {
-    const userRepository = new InMemoryUserRepository();
-    const repository = new InMemoryWorkspaceRepository(userRepository);
-    const app = createTestApp(repository, userRepository);
-
-    const owner = await authenticatedBrowserRequest(
-      app,
-      TEST_ORIGIN,
-      'role-owner@example.com'
-    );
-
-    const member = await authenticatedBrowserRequest(
-      app,
-      TEST_ORIGIN,
-      'role-member@example.com'
-    );
-
-    const created = await owner
-      .post('/api/workspaces')
-      .send({ name: 'Role Management Team' })
-      .expect(201);
-
-    const workspaceId: string = created.body.data.id;
-
-    const added = await owner
-      .post(`/api/workspaces/${workspaceId}/members`)
-      .send({ email: 'role-member@example.com' })
-      .expect(201);
-
-    const membership: WorkspaceMemberSummary = added.body.data;
-
-    return {
-      app,
-      repository,
-      owner,
-      member,
-      workspaceId,
-      membership,
-    };
-  }
-
   it('promotes and demotes a member with the same session', async () => {
-    const fixture = await createRoleChangeFixture();
+    const fixture = await createWorkspaceMembershipFixture();
 
     const memberPath =
       `/api/workspaces/${fixture.workspaceId}/members/` + fixture.membership.id;
@@ -1973,7 +1973,7 @@ describe('workspace member role API', () => {
   it.each(['member', 'admin'] as const)(
     'rejects role changes requested by an %s',
     async (role) => {
-      const fixture = await createRoleChangeFixture();
+      const fixture = await createWorkspaceMembershipFixture();
 
       const memberPath =
         `/api/workspaces/${fixture.workspaceId}/members/` +
@@ -2058,7 +2058,7 @@ describe('workspace member role API', () => {
   });
 
   it('returns the same 404 for inaccessible and missing workspaces', async () => {
-    const fixture = await createRoleChangeFixture();
+    const fixture = await createWorkspaceMembershipFixture();
 
     const outsider = await authenticatedBrowserRequest(
       fixture.app,
@@ -2088,7 +2088,7 @@ describe('workspace member role API', () => {
   });
 
   it('returns 404 when the guarded write no longer matches', async () => {
-    const fixture = await createRoleChangeFixture();
+    const fixture = await createWorkspaceMembershipFixture();
 
     const updateRole = vi
       .spyOn(fixture.repository, 'updateMemberRoleForOwner')
@@ -2104,5 +2104,181 @@ describe('workspace member role API', () => {
 
     expect(response.body.error.code).toBe('MEMBERSHIP_UNAVAILABLE');
     expect(updateRole).toHaveBeenCalledOnce();
+  });
+});
+
+describe('workspace member removal API', () => {
+  const missingId = '00000000-0000-4000-8000-000000000001';
+  const samplePath = `/api/workspaces/${missingId}/members/${missingId}`;
+
+  it.each(['member', 'admin'] as const)(
+    'removes a %s and revokes workspace access',
+    async (role) => {
+      const fixture = await createWorkspaceMembershipFixture();
+
+      const workspacePath = `/api/workspaces/${fixture.workspaceId}`;
+      const membersPath = `${workspacePath}/members`;
+      const memberPath = `${membersPath}/${fixture.membership.id}`;
+
+      if (role === 'admin') {
+        await fixture.owner
+          .patch(memberPath)
+          .send({ role: 'admin' })
+          .expect(200);
+      }
+
+      const before = await fixture.member.get(workspacePath).expect(200);
+
+      expect(before.body.data.role).toBe(role);
+
+      const removed = await fixture.owner.delete(memberPath).expect(204);
+
+      expect(removed.text).toBe('');
+
+      const roster = await fixture.owner.get(membersPath).expect(200);
+
+      expect(roster.body.data).toHaveLength(1);
+      expect(roster.body.data[0]).toMatchObject({
+        role: 'owner',
+      });
+
+      await fixture.member.get(workspacePath).expect(404);
+      await fixture.member.get(membersPath).expect(404);
+
+      const workspaces = await fixture.member
+        .get('/api/workspaces')
+        .expect(200);
+
+      expect(workspaces.body.data).not.toContainEqual(
+        expect.objectContaining({
+          id: fixture.workspaceId,
+        })
+      );
+
+      const account = await fixture.member.get('/api/auth/me').expect(200);
+
+      expect(account.body.data.id).toBe(fixture.membership.userId);
+
+      const repeated = await fixture.owner.delete(memberPath).expect(404);
+
+      expect(repeated.body.error.code).toBe('MEMBERSHIP_UNAVAILABLE');
+    }
+  );
+
+  it.each(['member', 'admin'] as const)(
+    'rejects removal requested by a requester with the %s role',
+    async (role) => {
+      const fixture = await createWorkspaceMembershipFixture();
+
+      const memberPath =
+        `/api/workspaces/${fixture.workspaceId}/members/` +
+        fixture.membership.id;
+
+      if (role === 'admin') {
+        await fixture.owner
+          .patch(memberPath)
+          .send({ role: 'admin' })
+          .expect(200);
+      }
+
+      const removeMember = vi.spyOn(fixture.repository, 'removeMemberForOwner');
+
+      const response = await fixture.member.delete(memberPath).expect(403);
+
+      expect(response.body.error.code).toBe('WORKSPACE_FORBIDDEN');
+
+      expect(removeMember).not.toHaveBeenCalled();
+    }
+  );
+
+  it('rejects anonymous membership removal', async () => {
+    const app = createTestApp();
+
+    const response = await browserRequest(app).delete(samplePath).expect(401);
+
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+  });
+
+  it.each([
+    {
+      caseName: 'a malformed workspace ID',
+      path: `/api/workspaces/not-a-uuid/members/${missingId}`,
+    },
+    {
+      caseName: 'a malformed membership ID',
+      path: `/api/workspaces/${missingId}/members/not-a-uuid`,
+    },
+  ])('rejects $caseName before calling workspace storage', async ({ path }) => {
+    const userRepository = new InMemoryUserRepository();
+    const repository = new InMemoryWorkspaceRepository(userRepository);
+
+    const app = createTestApp(repository, userRepository);
+    const owner = await authenticatedBrowserRequest(app);
+
+    const findForUser = vi.spyOn(repository, 'findForUser');
+    const removeMember = vi.spyOn(repository, 'removeMemberForOwner');
+
+    const response = await owner.delete(path).expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(findForUser).not.toHaveBeenCalled();
+    expect(removeMember).not.toHaveBeenCalled();
+  });
+
+  it('returns the same 404 for inaccessible and missing workspaces', async () => {
+    const fixture = await createWorkspaceMembershipFixture();
+
+    const outsider = await authenticatedBrowserRequest(
+      fixture.app,
+      TEST_ORIGIN,
+      'removal-outsider@example.com'
+    );
+
+    const removeMember = vi.spyOn(fixture.repository, 'removeMemberForOwner');
+
+    for (const workspaceId of [fixture.workspaceId, missingId]) {
+      const response = await outsider
+        .delete(
+          `/api/workspaces/${workspaceId}/members/` + fixture.membership.id
+        )
+        .expect(404);
+
+      expect(response.body).toEqual({
+        error: {
+          code: 'WORKSPACE_NOT_FOUND',
+          message: 'Workspace not found',
+        },
+      });
+    }
+
+    expect(removeMember).not.toHaveBeenCalled();
+  });
+
+  it('protects the owner membership through the HTTP endpoint', async () => {
+    const fixture = await createWorkspaceMembershipFixture();
+
+    const membersPath = `/api/workspaces/${fixture.workspaceId}/members`;
+
+    const before = await fixture.owner.get(membersPath).expect(200);
+
+    const members: readonly WorkspaceMemberSummary[] = before.body.data;
+
+    const ownerMembership = members.find(
+      (membership) => membership.role === 'owner'
+    );
+
+    if (ownerMembership === undefined) {
+      throw new Error('Expected an owner membership');
+    }
+
+    const response = await fixture.owner
+      .delete(`${membersPath}/${ownerMembership.id}`)
+      .expect(404);
+
+    expect(response.body.error.code).toBe('MEMBERSHIP_UNAVAILABLE');
+
+    const after = await fixture.owner.get(membersPath).expect(200);
+
+    expect(after.body.data).toEqual(before.body.data);
   });
 });

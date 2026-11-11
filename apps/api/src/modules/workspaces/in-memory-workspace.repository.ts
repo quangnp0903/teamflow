@@ -21,6 +21,8 @@ import type { UserRepository } from '../users/user.repository.ts';
 import {
   canManageWorkspace,
   canChangeWorkspaceMemberRoles,
+  REMOVABLE_WORKSPACE_ROLES,
+  canRemoveWorkspaceMembers,
 } from './workspace.permission.ts';
 
 export class InMemoryWorkspaceRepository implements WorkspaceRepository {
@@ -315,5 +317,41 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       role: updatedMembership.role,
       joinedAt: updatedMembership.createdAt,
     };
+  }
+
+  async removeMemberForOwner(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string
+  ): Promise<boolean> {
+    const workspaceExists = this.workspaces.some(
+      (workspace) => workspace.id === workspaceId
+    );
+
+    const hasPermission = this.members.some(
+      (membership) =>
+        membership.workspaceId === workspaceId &&
+        membership.userId === requesterId &&
+        canRemoveWorkspaceMembers(membership.role)
+    );
+
+    if (!workspaceExists || !hasPermission) {
+      return false;
+    }
+
+    const index = this.members.findIndex(
+      (membership) =>
+        membership.id === memberId &&
+        membership.workspaceId === workspaceId &&
+        REMOVABLE_WORKSPACE_ROLES.some((role) => role === membership.role)
+    );
+
+    if (index === -1) {
+      return false;
+    }
+
+    this.members.splice(index, 1);
+
+    return true;
   }
 }

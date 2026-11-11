@@ -75,4 +75,14 @@ export interface WorkspaceRepository {
     memberId: string,
     input: UpdateWorkspaceMemberRoleInput
   ): Promise<WorkspaceMemberSummary | null>;
+
+  /**
+   * Removes an admin/member membership when the requester owns the workspace.
+   * Returns false when no membership matches that permission scope.
+   */
+  removeMemberForOwner(
+    requesterId: string,
+    workspaceId: string,
+    memberId: string
+  ): Promise<boolean>;
 }

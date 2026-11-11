@@ -12,6 +12,7 @@ export function createWorkspaceRouter(controller: WorkspaceController) {
   router.get('/:workspaceId', controller.getById);
   router.patch('/:workspaceId', controller.rename);
   router.post('/', controller.create);
+  router.delete('/:workspaceId/members/:memberId', controller.removeMember);
 
   return router;
 }

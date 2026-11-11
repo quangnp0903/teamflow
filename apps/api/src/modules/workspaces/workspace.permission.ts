@@ -5,6 +5,15 @@ export const WORKSPACE_MANAGER_ROLES = [
   'admin',
 ] as const satisfies readonly WorkspaceRole[];
 
+export const REMOVABLE_WORKSPACE_ROLES = [
+  'admin',
+  'member',
+] as const satisfies readonly WorkspaceRole[];
+
+export function canRemoveWorkspaceMembers(role: WorkspaceRole): boolean {
+  return role === 'owner';
+}
+
 export function canManageWorkspace(role: WorkspaceRole): boolean {
   return WORKSPACE_MANAGER_ROLES.some((allowedRole) => allowedRole === role);
 }

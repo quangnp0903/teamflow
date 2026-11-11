@@ -72,14 +72,14 @@ const additionUsers = {
 
 const additionWorkspaceIds: string[] = [];
 
-const roleChangeUsers = {
+const membershipUserIds = {
   owner: randomUUID(),
   admin: randomUUID(),
   member: randomUUID(),
   outsider: randomUUID(),
 };
 
-const roleChangeWorkspaceIds: string[] = [];
+const membershipWorkspaceIds: string[] = [];
 
 const fixtureUserIds = [
   ownerId,
@@ -91,7 +91,7 @@ const fixtureUserIds = [
   rosterOutsiderId,
   ...Object.values(renameUsers),
   ...Object.values(additionUsers),
-  ...Object.values(roleChangeUsers),
+  ...Object.values(membershipUserIds),
 ];
 
 const fixtureWorkspaceNames = [
@@ -126,10 +126,10 @@ async function createMemberAdditionWorkspace(): Promise<string> {
   return workspaceId;
 }
 
-async function createRoleChangeWorkspace() {
+async function createWorkspaceMembersFixture() {
   const workspaceId = randomUUID();
 
-  roleChangeWorkspaceIds.push(workspaceId);
+  membershipWorkspaceIds.push(workspaceId);
 
   const workspace = await prisma.workspace.create({
     data: {
@@ -137,9 +137,9 @@ async function createRoleChangeWorkspace() {
       name: `workspace-role-change-${workspaceId}`,
       members: {
         create: [
-          { userId: roleChangeUsers.owner, role: 'owner' },
-          { userId: roleChangeUsers.admin, role: 'admin' },
-          { userId: roleChangeUsers.member, role: 'member' },
+          { userId: membershipUserIds.owner, role: 'owner' },
+          { userId: membershipUserIds.admin, role: 'admin' },
+          { userId: membershipUserIds.member, role: 'member' },
         ],
       },
     },
@@ -149,13 +149,13 @@ async function createRoleChangeWorkspace() {
   });
 
   const owner = workspace.members.find(
-    (membership) => membership.userId === roleChangeUsers.owner
+    (membership) => membership.userId === membershipUserIds.owner
   );
   const admin = workspace.members.find(
-    (membership) => membership.userId === roleChangeUsers.admin
+    (membership) => membership.userId === membershipUserIds.admin
   );
   const member = workspace.members.find(
-    (membership) => membership.userId === roleChangeUsers.member
+    (membership) => membership.userId === membershipUserIds.member
   );
 
   if (owner === undefined || admin === undefined || member === undefined) {
@@ -194,7 +194,7 @@ describe('PrismaWorkspaceRepository', () => {
                 in: [
                   ...renameWorkspaceIds,
                   ...additionWorkspaceIds,
-                  ...roleChangeWorkspaceIds,
+                  ...membershipWorkspaceIds,
                 ],
               },
             },
@@ -764,10 +764,10 @@ describe('PrismaWorkspaceRepository', () => {
   ] as const)(
     'enforces member-role permissions for $actor',
     async ({ actor, canChange }) => {
-      const fixture = await createRoleChangeWorkspace();
+      const fixture = await createWorkspaceMembersFixture();
 
       const result = await repository.updateMemberRoleForOwner(
-        roleChangeUsers[actor],
+        membershipUserIds[actor],
         fixture.workspaceId,
         fixture.member.id,
         { role: 'admin' }
@@ -787,8 +787,8 @@ describe('PrismaWorkspaceRepository', () => {
 
       expect(result).toEqual({
         id: fixture.member.id,
-        userId: roleChangeUsers.member,
-        displayName: `Workspace fixture ${roleChangeUsers.member}`,
+        userId: membershipUserIds.member,
+        displayName: `Workspace fixture ${membershipUserIds.member}`,
         role: 'admin',
         joinedAt: fixture.member.createdAt.toISOString(),
       });
@@ -796,10 +796,10 @@ describe('PrismaWorkspaceRepository', () => {
   );
 
   it('rejects a role change after the requester loses ownership access', async () => {
-    const fixture = await createRoleChangeWorkspace();
+    const fixture = await createWorkspaceMembersFixture();
 
     const earlierLookup = await repository.findForUser(
-      roleChangeUsers.owner,
+      membershipUserIds.owner,
       fixture.workspaceId
     );
 
@@ -810,7 +810,7 @@ describe('PrismaWorkspaceRepository', () => {
     });
 
     const result = await repository.updateMemberRoleForOwner(
-      roleChangeUsers.owner,
+      membershipUserIds.owner,
       fixture.workspaceId,
       fixture.member.id,
       { role: 'admin' }
@@ -826,10 +826,10 @@ describe('PrismaWorkspaceRepository', () => {
   });
 
   it('allows an owner to demote an admin to member', async () => {
-    const fixture = await createRoleChangeWorkspace();
+    const fixture = await createWorkspaceMembersFixture();
 
     const result = await repository.updateMemberRoleForOwner(
-      roleChangeUsers.owner,
+      membershipUserIds.owner,
       fixture.workspaceId,
       fixture.admin.id,
       { role: 'member' }
@@ -837,7 +837,7 @@ describe('PrismaWorkspaceRepository', () => {
 
     expect(result).toMatchObject({
       id: fixture.admin.id,
-      userId: roleChangeUsers.admin,
+      userId: membershipUserIds.admin,
       role: 'member',
     });
 
@@ -849,10 +849,10 @@ describe('PrismaWorkspaceRepository', () => {
   });
 
   it('does not change an existing owner membership', async () => {
-    const fixture = await createRoleChangeWorkspace();
+    const fixture = await createWorkspaceMembersFixture();
 
     const result = await repository.updateMemberRoleForOwner(
-      roleChangeUsers.owner,
+      membershipUserIds.owner,
       fixture.workspaceId,
       fixture.owner.id,
       { role: 'member' }
@@ -868,11 +868,11 @@ describe('PrismaWorkspaceRepository', () => {
   });
 
   it('rejects a membership belonging to another workspace', async () => {
-    const first = await createRoleChangeWorkspace();
-    const second = await createRoleChangeWorkspace();
+    const first = await createWorkspaceMembersFixture();
+    const second = await createWorkspaceMembersFixture();
 
     const result = await repository.updateMemberRoleForOwner(
-      roleChangeUsers.owner,
+      membershipUserIds.owner,
       first.workspaceId,
       second.member.id,
       { role: 'admin' }
@@ -885,5 +885,154 @@ describe('PrismaWorkspaceRepository', () => {
     });
 
     expect(stored).toEqual(second.member);
+  });
+
+  it.each(['admin', 'member'] as const)(
+    'removes a %s membership and revokes workspace access',
+    async (role) => {
+      const fixture = await createWorkspaceMembersFixture();
+      const target = fixture[role];
+
+      await expect(
+        repository.findForUser(target.userId, fixture.workspaceId)
+      ).resolves.toMatchObject({ role });
+
+      const removed = await repository.removeMemberForOwner(
+        membershipUserIds.owner,
+        fixture.workspaceId,
+        target.id
+      );
+
+      expect(removed).toBe(true);
+
+      await expect(
+        prisma.workspaceMember.findUnique({
+          where: { id: target.id },
+        })
+      ).resolves.toBeNull();
+
+      await expect(
+        repository.findForUser(target.userId, fixture.workspaceId)
+      ).resolves.toBeNull();
+
+      await expect(
+        prisma.workspaceMember.count({
+          where: { workspaceId: fixture.workspaceId },
+        })
+      ).resolves.toBe(2);
+
+      await expect(
+        prisma.user.findUnique({
+          where: { id: target.userId },
+        })
+      ).resolves.not.toBeNull();
+
+      await expect(
+        repository.removeMemberForOwner(
+          membershipUserIds.owner,
+          fixture.workspaceId,
+          target.id
+        )
+      ).resolves.toBe(false);
+    }
+  );
+
+  it.each(['admin', 'member', 'outsider'] as const)(
+    'rejects membership removal requested by an %s',
+    async (actor) => {
+      const fixture = await createWorkspaceMembersFixture();
+
+      const removed = await repository.removeMemberForOwner(
+        membershipUserIds[actor],
+        fixture.workspaceId,
+        fixture.member.id
+      );
+
+      expect(removed).toBe(false);
+
+      await expect(
+        prisma.workspaceMember.findUniqueOrThrow({
+          where: { id: fixture.member.id },
+        })
+      ).resolves.toEqual(fixture.member);
+    }
+  );
+
+  it('protects the owner membership from removal', async () => {
+    const fixture = await createWorkspaceMembersFixture();
+
+    const removed = await repository.removeMemberForOwner(
+      membershipUserIds.owner,
+      fixture.workspaceId,
+      fixture.owner.id
+    );
+
+    expect(removed).toBe(false);
+
+    await expect(
+      prisma.workspaceMember.findUniqueOrThrow({
+        where: { id: fixture.owner.id },
+      })
+    ).resolves.toEqual(fixture.owner);
+
+    await expect(
+      prisma.workspaceMember.count({
+        where: { workspaceId: fixture.workspaceId },
+      })
+    ).resolves.toBe(3);
+  });
+
+  it('rejects removal of a membership from another workspace', async () => {
+    const first = await createWorkspaceMembersFixture();
+    const second = await createWorkspaceMembersFixture();
+
+    const removed = await repository.removeMemberForOwner(
+      membershipUserIds.owner,
+      first.workspaceId,
+      second.member.id
+    );
+
+    expect(removed).toBe(false);
+
+    await expect(
+      prisma.workspaceMember.findUniqueOrThrow({
+        where: { id: second.member.id },
+      })
+    ).resolves.toEqual(second.member);
+
+    await expect(
+      prisma.workspaceMember.count({
+        where: { workspaceId: first.workspaceId },
+      })
+    ).resolves.toBe(3);
+  });
+
+  it('rejects removal after the requester loses ownership access', async () => {
+    const fixture = await createWorkspaceMembersFixture();
+
+    const earlierLookup = await repository.findForUser(
+      membershipUserIds.owner,
+      fixture.workspaceId
+    );
+
+    expect(earlierLookup?.role).toBe('owner');
+
+    await prisma.workspaceMember.delete({
+      where: { id: fixture.owner.id },
+    });
+
+    const removed = await repository.removeMemberForOwner(
+      membershipUserIds.owner,
+      fixture.workspaceId,
+      fixture.member.id
+    );
+
+    expect(removed).toBe(false);
+
+    await expect(
+      prisma.workspaceMember.findUniqueOrThrow({
+        where: { id: fixture.member.id },
+      })
+    ).resolves.toEqual(fixture.member);
   });
 });
