@@ -4,6 +4,7 @@ import useWorkspaceMembers from '../../hooks/useWorkspaceMembers';
 import { WORKSPACE_ROLE_LABELS } from '../../workspace.constants';
 import type { WorkspaceRole } from '../../workspace.types';
 import AddWorkspaceMemberForm from '../AddWorkspaceMemberForm/AddWorkspaceMemberForm';
+import WorkspaceMemberRoleSelect from '../WorkspaceMemberRoleSelect/WorkspaceMemberRoleSelect';
 import styles from './WorkspaceMembersPanel.module.css';
 
 type WorkspaceMembersPanelProps = Readonly<{
@@ -15,9 +16,11 @@ const WorkspaceMembersPanel: FC<WorkspaceMembersPanelProps> = ({
   workspaceId,
   requesterRole,
 }) => {
-  const { state, retry, addMember } = useWorkspaceMembers(workspaceId);
+  const { state, retry, addMember, updateMemberRole } =
+    useWorkspaceMembers(workspaceId);
 
   const canAddMembers = requesterRole === 'owner' || requesterRole === 'admin';
+  const canChangeMemberRoles = requesterRole === 'owner';
 
   return (
     <section
@@ -70,9 +73,18 @@ const WorkspaceMembersPanel: FC<WorkspaceMembersPanelProps> = ({
                     </p>
                   </div>
 
-                  <span className={styles.role}>
-                    {WORKSPACE_ROLE_LABELS[member.role]}
-                  </span>
+                  {canChangeMemberRoles && member.role !== 'owner' ? (
+                    <WorkspaceMemberRoleSelect
+                      memberId={member.id}
+                      memberName={member.displayName}
+                      role={member.role}
+                      onUpdate={updateMemberRole}
+                    />
+                  ) : (
+                    <span className={styles.role}>
+                      {WORKSPACE_ROLE_LABELS[member.role]}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

@@ -4,11 +4,13 @@ import { ApiError } from 'src/lib/http';
 
 import type {
   AddWorkspaceMemberInput,
+  UpdateWorkspaceMemberRoleInput,
   WorkspaceMemberSummary,
 } from '../workspace.types';
 import {
   listWorkspaceMembers,
   addWorkspaceMember as addWorkspaceMemberRequest,
+  updateWorkspaceMemberRole as updateWorkspaceMemberRoleRequest,
 } from '../api/workspace.api';
 
 type WorkspaceMembersState =
@@ -59,6 +61,30 @@ function useWorkspaceMembers(workspaceId: string) {
     });
   }
 
+  async function updateMemberRole(
+    memberId: string,
+    input: UpdateWorkspaceMemberRoleInput
+  ): Promise<void> {
+    const updatedMember = await updateWorkspaceMemberRoleRequest(
+      workspaceId,
+      memberId,
+      input
+    );
+
+    setState((currentState) => {
+      if (currentState.status !== 'success') {
+        return currentState;
+      }
+
+      return {
+        status: 'success',
+        members: currentState.members.map((member) =>
+          member.id === updatedMember.id ? updatedMember : member
+        ),
+      };
+    });
+  }
+
   useEffect(() => {
     let isCurrent = true;
     const controller = new AbortController();
@@ -104,7 +130,7 @@ function useWorkspaceMembers(workspaceId: string) {
     };
   }, [workspaceId, refreshVersion]);
 
-  return { state, retry, addMember };
+  return { state, retry, addMember, updateMemberRole };
 }
 
 export default useWorkspaceMembers;

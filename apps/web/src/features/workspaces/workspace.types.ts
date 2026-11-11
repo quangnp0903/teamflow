@@ -4,7 +4,10 @@ import type {
   WorkspaceMemberSummary,
 } from '@teamflow/contracts/workspaces';
 
-export { WORKSPACE_ROLES } from '@teamflow/contracts/workspaces';
+export {
+  WORKSPACE_ROLES,
+  ASSIGNABLE_WORKSPACE_ROLES,
+} from '@teamflow/contracts/workspaces';
 
 export type {
   Workspace,
@@ -13,6 +16,8 @@ export type {
   WorkspaceMemberSummary,
   RenameWorkspaceInput,
   AddWorkspaceMemberInput,
+  AssignableWorkspaceRole,
+  UpdateWorkspaceMemberRoleInput,
 } from '@teamflow/contracts/workspaces';
 
 export type CreateWorkspaceInput = Readonly<{

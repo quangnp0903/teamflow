@@ -12,6 +12,7 @@ import type {
   WorkspaceWithRole,
   AddWorkspaceMemberInput,
   WorkspaceMemberResponse,
+  UpdateWorkspaceMemberRoleInput,
 } from '../workspace.types';
 
 export async function listWorkspaces(
@@ -107,6 +108,29 @@ export async function addWorkspaceMember(
       },
       body: JSON.stringify({
         email: input.email,
+      }),
+    }
+  );
+
+  return response.data;
+}
+
+export async function updateWorkspaceMemberRole(
+  workspaceId: string,
+  memberId: string,
+  input: UpdateWorkspaceMemberRoleInput
+): Promise<WorkspaceMemberSummary> {
+  const response = await requestJson<WorkspaceMemberResponse>(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}/members/` +
+      encodeURIComponent(memberId),
+    {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        role: input.role,
       }),
     }
   );

@@ -30,6 +30,7 @@ vi.mock('../api/workspace.api', () => ({
   listWorkspaceMembers: vi.fn(),
   renameWorkspace: vi.fn(),
   addWorkspaceMember: vi.fn(),
+  updateWorkspaceMemberRole: vi.fn(),
 }));
 
 const getWorkspaceMock = vi.mocked(getWorkspace);
