@@ -1,4 +1,4 @@
-import { requestJson } from 'src/lib/http';
+import { requestJson, request } from 'src/lib/http';
 
 import type {
   CreateWorkspaceInput,
@@ -136,4 +136,18 @@ export async function updateWorkspaceMemberRole(
   );
 
   return response.data;
+}
+
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  memberId: string
+): Promise<void> {
+  await request(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}/members/` +
+      encodeURIComponent(memberId),
+    {
+      method: 'DELETE',
+      credentials: 'include',
+    }
+  );
 }

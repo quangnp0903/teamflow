@@ -11,6 +11,7 @@ import {
   listWorkspaceMembers,
   addWorkspaceMember as addWorkspaceMemberRequest,
   updateWorkspaceMemberRole as updateWorkspaceMemberRoleRequest,
+  removeWorkspaceMember as removeWorkspaceMemberRequest,
 } from '../api/workspace.api';
 
 type WorkspaceMembersState =
@@ -85,6 +86,23 @@ function useWorkspaceMembers(workspaceId: string) {
     });
   }
 
+  async function removeMember(memberId: string): Promise<void> {
+    await removeWorkspaceMemberRequest(workspaceId, memberId);
+
+    setState((currentState) => {
+      if (currentState.status !== 'success') {
+        return currentState;
+      }
+
+      return {
+        status: 'success',
+        members: currentState.members.filter(
+          (member) => member.id !== memberId
+        ),
+      };
+    });
+  }
+
   useEffect(() => {
     let isCurrent = true;
     const controller = new AbortController();
@@ -130,7 +148,7 @@ function useWorkspaceMembers(workspaceId: string) {
     };
   }, [workspaceId, refreshVersion]);
 
-  return { state, retry, addMember, updateMemberRole };
+  return { state, retry, addMember, updateMemberRole, removeMember };
 }
 
 export default useWorkspaceMembers;

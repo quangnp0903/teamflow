@@ -4,7 +4,7 @@ import useWorkspaceMembers from '../../hooks/useWorkspaceMembers';
 import { WORKSPACE_ROLE_LABELS } from '../../workspace.constants';
 import type { WorkspaceRole } from '../../workspace.types';
 import AddWorkspaceMemberForm from '../AddWorkspaceMemberForm/AddWorkspaceMemberForm';
-import WorkspaceMemberRoleSelect from '../WorkspaceMemberRoleSelect/WorkspaceMemberRoleSelect';
+import WorkspaceMemberActions from '../WorkspaceMemberActions/WorkspaceMemberActions';
 import styles from './WorkspaceMembersPanel.module.css';
 
 type WorkspaceMembersPanelProps = Readonly<{
@@ -16,11 +16,11 @@ const WorkspaceMembersPanel: FC<WorkspaceMembersPanelProps> = ({
   workspaceId,
   requesterRole,
 }) => {
-  const { state, retry, addMember, updateMemberRole } =
+  const { state, retry, addMember, updateMemberRole, removeMember } =
     useWorkspaceMembers(workspaceId);
 
   const canAddMembers = requesterRole === 'owner' || requesterRole === 'admin';
-  const canChangeMemberRoles = requesterRole === 'owner';
+  const isOwner = requesterRole === 'owner';
 
   return (
     <section
@@ -73,12 +73,13 @@ const WorkspaceMembersPanel: FC<WorkspaceMembersPanelProps> = ({
                     </p>
                   </div>
 
-                  {canChangeMemberRoles && member.role !== 'owner' ? (
-                    <WorkspaceMemberRoleSelect
+                  {isOwner && member.role !== 'owner' ? (
+                    <WorkspaceMemberActions
                       memberId={member.id}
                       memberName={member.displayName}
                       role={member.role}
                       onUpdate={updateMemberRole}
+                      onRemove={removeMember}
                     />
                   ) : (
                     <span className={styles.role}>

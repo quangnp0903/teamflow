@@ -1,9 +1,10 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   listWorkspaceMembers,
+  removeWorkspaceMember,
   updateWorkspaceMemberRole,
 } from '../../api/workspace.api';
 import type {
@@ -16,10 +17,12 @@ vi.mock('../../api/workspace.api', () => ({
   listWorkspaceMembers: vi.fn(),
   addWorkspaceMember: vi.fn(),
   updateWorkspaceMemberRole: vi.fn(),
+  removeWorkspaceMember: vi.fn(),
 }));
 
 const listMembersMock = vi.mocked(listWorkspaceMembers);
 const updateRoleMock = vi.mocked(updateWorkspaceMemberRole);
+const removeMemberMock = vi.mocked(removeWorkspaceMember);
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -57,6 +60,13 @@ beforeEach(() => {
     .mockResolvedValue([OWNER_MEMBER, TARGET_MEMBER, OTHER_MEMBER]);
 
   updateRoleMock.mockReset();
+
+  removeMemberMock.mockReset();
+});
+
+afterEach(() => {
+  // This restores the browser’s original window.confirm after each test.
+  vi.restoreAllMocks();
 });
 
 async function renderMembers(requesterRole: WorkspaceRole = 'owner') {
@@ -158,6 +168,14 @@ describe('WorkspaceMembersPanel role management', () => {
       expect(within(roster).queryByRole('combobox')).not.toBeInTheDocument();
 
       expect(updateRoleMock).not.toHaveBeenCalled();
+
+      expect(
+        within(roster).queryByRole('button', {
+          name: /^Remove /,
+        })
+      ).not.toBeInTheDocument();
+
+      expect(removeMemberMock).not.toHaveBeenCalled();
     }
   );
 
@@ -219,6 +237,17 @@ describe('WorkspaceMembersPanel role management', () => {
     await user.selectOptions(roleSelect, 'admin');
 
     expect(roleSelect).toBeDisabled();
+    expect(
+      within(card).getByRole('button', {
+        name: 'Remove Bob',
+      })
+    ).toBeDisabled();
+
+    expect(
+      within(roster).getByRole('button', {
+        name: 'Remove Carol',
+      })
+    ).toBeEnabled();
     expect(roleSelect).toHaveValue('member');
     expect(within(card).getByRole('status')).toHaveTextContent('Saving role');
 
@@ -243,5 +272,172 @@ describe('WorkspaceMembersPanel role management', () => {
       expect(roleSelect).toBeEnabled();
       expect(within(card).getByRole('status')).toHaveTextContent('Role saved.');
     });
+  });
+});
+
+describe('WorkspaceMembersPanel member removal', () => {
+  it('keeps the member when confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    const roster = await renderMembers();
+    const card = getMemberCard(roster, 'Bob');
+
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Remove Bob',
+      })
+    );
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      'Remove "Bob" from this workspace? They will lose access.'
+    );
+
+    expect(removeMemberMock).not.toHaveBeenCalled();
+    expect(card).toBeInTheDocument();
+    expect(within(roster).getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('removes only the confirmed member', async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    removeMemberMock.mockResolvedValue(undefined);
+
+    const roster = await renderMembers();
+    const card = getMemberCard(roster, 'Bob');
+
+    expect(
+      within(roster).queryByRole('button', {
+        name: 'Remove Alice',
+      })
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Remove Bob',
+      })
+    );
+
+    await waitFor(() => {
+      expect(card).not.toBeInTheDocument();
+    });
+
+    expect(removeMemberMock).toHaveBeenCalledOnce();
+    expect(removeMemberMock).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      TARGET_MEMBER.id
+    );
+
+    expect(within(roster).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(roster).getByText('Alice')).toBeInTheDocument();
+    expect(within(roster).getByText('Carol')).toBeInTheDocument();
+  });
+
+  it('preserves the member after failure and allows retry', async () => {
+    const user = userEvent.setup();
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    removeMemberMock
+      .mockRejectedValueOnce(new Error('Network unavailable'))
+      .mockResolvedValue(undefined);
+
+    const roster = await renderMembers();
+    const card = getMemberCard(roster, 'Bob');
+
+    const removeButton = within(card).getByRole('button', {
+      name: 'Remove Bob',
+    });
+    const roleSelect = within(card).getByRole('combobox', {
+      name: 'Role for Bob',
+    });
+
+    await user.click(removeButton);
+
+    expect(await within(card).findByRole('alert')).toHaveTextContent(
+      'Network unavailable'
+    );
+
+    expect(card).toBeInTheDocument();
+    expect(roleSelect).toHaveValue('member');
+    expect(removeButton).toHaveAccessibleDescription('Network unavailable');
+
+    await waitFor(() => {
+      expect(removeButton).toBeEnabled();
+      expect(roleSelect).toBeEnabled();
+    });
+
+    await user.click(removeButton);
+
+    await waitFor(() => {
+      expect(card).not.toBeInTheDocument();
+    });
+
+    expect(removeMemberMock).toHaveBeenCalledTimes(2);
+    expect(confirmMock).toHaveBeenCalledTimes(2);
+
+    expect(within(roster).queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('keeps the row and disables its controls while removal is pending', async () => {
+    const user = userEvent.setup();
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    let finishRemoval: (() => void) | undefined;
+
+    removeMemberMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRemoval = () => resolve(undefined);
+        })
+    );
+
+    const roster = await renderMembers();
+    const card = getMemberCard(roster, 'Bob');
+
+    const removeButton = within(card).getByRole('button', {
+      name: 'Remove Bob',
+    });
+    const roleSelect = within(card).getByRole('combobox', {
+      name: 'Role for Bob',
+    });
+
+    await user.click(removeButton);
+
+    expect(card).toBeInTheDocument();
+    expect(removeButton).toBeDisabled();
+    expect(roleSelect).toBeDisabled();
+    expect(within(card).getByRole('status')).toHaveTextContent(
+      'Removing member'
+    );
+
+    expect(
+      within(roster).getByRole('button', {
+        name: 'Remove Carol',
+      })
+    ).toBeEnabled();
+
+    expect(
+      within(roster).getByRole('combobox', {
+        name: 'Role for Carol',
+      })
+    ).toBeEnabled();
+
+    expect(removeMemberMock).toHaveBeenCalledOnce();
+    expect(confirmMock).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      if (finishRemoval === undefined) {
+        throw new Error('Expected a pending removal request');
+      }
+
+      finishRemoval();
+    });
+
+    await waitFor(() => {
+      expect(card).not.toBeInTheDocument();
+    });
+
+    expect(within(roster).getAllByRole('listitem')).toHaveLength(2);
   });
 });
