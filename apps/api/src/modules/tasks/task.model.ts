@@ -1,6 +1,6 @@
-export const TASK_STATUSES = ['todo', 'in_progress', 'done'] as const;
+import type { TaskStatus } from '@teamflow/contracts/tasks';
 
-export type TaskStatus = (typeof TASK_STATUSES)[number];
+export { TASK_STATUSES, type TaskStatus } from '@teamflow/contracts/tasks';
 
 export type Task = Readonly<{
   id: string;

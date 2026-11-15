@@ -7,6 +7,10 @@
     "./workspaces": {
       "types": "./dist/workspaces.d.ts",
       "default": "./dist/workspaces.js"
+    },
+    "./tasks": {
+      "types": "./dist/tasks.d.ts",
+      "default": "./dist/tasks.js"
     }
   },
   "files": [

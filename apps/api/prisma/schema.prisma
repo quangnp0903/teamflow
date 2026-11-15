@@ -54,10 +54,15 @@ model Task {
   status      TaskStatus @default(todo)
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
-  ownerId     String @map("owner_id") @db.Uuid
-  owner       User   @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  ownerId String @map("owner_id") @db.Uuid
+  owner   User   @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([ownerId])
+  @@index([workspaceId, createdAt, id])
   @@map("tasks")
 }
 
@@ -68,6 +73,7 @@ model Workspace {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   members WorkspaceMember[]
+  tasks   Task[]
 
   @@map("workspaces")
 }

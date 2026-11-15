@@ -37,7 +37,10 @@ export class PrismaTaskRepository implements TaskRepository {
   }
 
   async list(ownerId: string, query: ListTasksQuery): Promise<TaskPage> {
-    const where: Prisma.TaskWhereInput = { ownerId };
+    const where: Prisma.TaskWhereInput = {
+      ownerId,
+      workspaceId: null,
+    };
 
     if (query.status !== undefined) {
       where.status = query.status;
@@ -80,6 +83,7 @@ export class PrismaTaskRepository implements TaskRepository {
       where: {
         id,
         ownerId,
+        workspaceId: null,
       },
     });
 
@@ -87,7 +91,12 @@ export class PrismaTaskRepository implements TaskRepository {
   }
 
   async create(input: CreateTaskRecord): Promise<Task> {
-    const task = await this.client.task.create({ data: input });
+    const task = await this.client.task.create({
+      data: {
+        ...input,
+        workspaceId: null,
+      },
+    });
 
     return toDomainTask(task);
   }
@@ -99,7 +108,11 @@ export class PrismaTaskRepository implements TaskRepository {
   ): Promise<Task | null> {
     try {
       const task = await this.client.task.update({
-        where: { id, ownerId },
+        where: {
+          id,
+          ownerId,
+          workspaceId: null,
+        },
         data: input,
       });
 
@@ -121,6 +134,7 @@ export class PrismaTaskRepository implements TaskRepository {
       where: {
         id,
         ownerId,
+        workspaceId: null,
       },
     });
 

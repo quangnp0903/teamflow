@@ -8,6 +8,7 @@ import { PrismaTaskRepository } from './prisma-task.repository.ts';
 
 const { parsed, error } = config({ path: '.env.test' });
 const ownerId = randomUUID();
+const workspaceId = randomUUID();
 
 if (error) {
   throw new Error('Could not load .env.test', { cause: error });
@@ -48,6 +49,19 @@ describe('PrismaTaskRepository', () => {
         passwordHash: 'unused-in-repository-test',
       },
     });
+
+    await prisma.workspace.create({
+      data: {
+        id: workspaceId,
+        name: 'Task repository workspace',
+        members: {
+          create: {
+            userId: ownerId,
+            role: 'owner',
+          },
+        },
+      },
+    });
   });
 
   afterEach(async () => {
@@ -68,6 +82,10 @@ describe('PrismaTaskRepository', () => {
     try {
       await prisma.task.deleteMany({
         where: { ownerId },
+      });
+
+      await prisma.workspace.deleteMany({
+        where: { id: workspaceId },
       });
 
       await prisma.user.deleteMany({
@@ -130,6 +148,12 @@ describe('PrismaTaskRepository', () => {
       description: null,
       status: 'todo',
     });
+
+    const storedTask = await prisma.task.findUniqueOrThrow({
+      where: { id: createdTask.id },
+    });
+
+    expect(storedTask.workspaceId).toBeNull();
 
     createdTaskIds.push(createdTask.id);
 
@@ -253,5 +277,54 @@ describe('PrismaTaskRepository', () => {
     await expect(repository.delete(ownerId, createdTask.id)).resolves.toBe(
       false
     );
+  });
+
+  it('excludes workspace tasks from every personal-task operation', async () => {
+    const sharedTask = await prisma.task.create({
+      data: {
+        ownerId,
+        workspaceId,
+        title: 'Shared workspace task',
+        description: null,
+        status: 'todo',
+      },
+    });
+
+    createdTaskIds.push(sharedTask.id);
+
+    await expect(
+      repository.list(ownerId, {
+        page: 1,
+        pageSize: 20,
+      })
+    ).resolves.toEqual({
+      items: [],
+      total: 0,
+    });
+
+    await expect(
+      repository.findById(ownerId, sharedTask.id)
+    ).resolves.toBeNull();
+
+    await expect(
+      repository.update(ownerId, sharedTask.id, {
+        title: 'Attempted personal-route update',
+      })
+    ).resolves.toBeNull();
+
+    await expect(repository.delete(ownerId, sharedTask.id)).resolves.toBe(
+      false
+    );
+
+    const storedTask = await prisma.task.findUniqueOrThrow({
+      where: { id: sharedTask.id },
+    });
+
+    expect(storedTask).toMatchObject({
+      ownerId,
+      workspaceId,
+      title: 'Shared workspace task',
+      status: 'todo',
+    });
   });
 });
