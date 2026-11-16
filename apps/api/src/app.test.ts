@@ -2,6 +2,7 @@ import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { WorkspaceMemberSummary } from '@teamflow/contracts/workspaces';
+import type { WorkspaceTask } from '@teamflow/contracts/tasks';
 
 import { InMemoryTaskRepository } from './modules/tasks/in-memory-task.repository.ts';
 import { FakePasswordHasher } from './modules/auth/fake-password-hasher.ts';
@@ -11,6 +12,10 @@ import { FakeSessionTokenManager } from './modules/auth/fake-session-token-manag
 import { InMemorySessionRepository } from './modules/sessions/in-memory-session.repository.ts';
 import { InMemoryWorkspaceRepository } from './modules/workspaces/in-memory-workspace.repository.ts';
 import type { WorkspaceRepository } from './modules/workspaces/workspace.repository.ts';
+import type {
+  WorkspaceTaskPage,
+  WorkspaceTaskRepository,
+} from './modules/workspace-tasks/workspace-task.repository.ts';
 
 const TEST_ORIGINS = [
   'http://localhost:5173',
@@ -21,12 +26,18 @@ const TEST_ORIGIN = TEST_ORIGINS[0];
 
 function createTestApp(
   workspaceRepository?: WorkspaceRepository,
-  userRepository = new InMemoryUserRepository()
+  userRepository = new InMemoryUserRepository(),
+  workspaceTaskRepository: WorkspaceTaskRepository = {
+    async listForMember() {
+      return null;
+    },
+  }
 ) {
   return createApp({
     taskRepository: new InMemoryTaskRepository(),
     workspaceRepository:
       workspaceRepository ?? new InMemoryWorkspaceRepository(userRepository),
+    workspaceTaskRepository,
     userRepository,
     sessionRepository: new InMemorySessionRepository(),
     passwordHasher: new FakePasswordHasher(),
@@ -2280,5 +2291,179 @@ describe('workspace member removal API', () => {
     const after = await fixture.owner.get(membersPath).expect(200);
 
     expect(after.body.data).toEqual(before.body.data);
+  });
+});
+
+describe('workspace task listing API', () => {
+  const workspaceId = '00000000-0000-4000-8000-000000000100';
+  const path = `/api/workspaces/${workspaceId}/tasks`;
+
+  function createFixture(
+    result: WorkspaceTaskPage | null = { items: [], total: 0 }
+  ) {
+    const listForMember = vi
+      .fn<WorkspaceTaskRepository['listForMember']>()
+      .mockResolvedValue(result);
+
+    const userRepository = new InMemoryUserRepository();
+
+    const app = createTestApp(undefined, userRepository, {
+      listForMember,
+    });
+
+    return { app, listForMember, userRepository };
+  }
+
+  it('rejects an anonymous request before calling task storage', async () => {
+    const fixture = createFixture();
+
+    const response = await browserRequest(fixture.app).get(path).expect(401);
+
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    expect(fixture.listForMember).not.toHaveBeenCalled();
+  });
+
+  it('uses the session user and normalized query and returns pagination metadata', async () => {
+    const task = {
+      id: '00000000-0000-4000-8000-000000000101',
+      workspaceId,
+      createdById: '00000000-0000-4000-8000-000000000102',
+      title: 'Ship workspace tasks',
+      description: null,
+      status: 'done',
+      createdAt: '2026-11-16T00:00:00.000Z',
+      updatedAt: '2026-11-16T00:00:00.000Z',
+    } satisfies WorkspaceTask;
+
+    const fixture = createFixture({
+      items: [task],
+      total: 6,
+    });
+
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const user = await fixture.userRepository.findByEmail(
+      'task-owner@example.com'
+    );
+
+    if (user === null) {
+      throw new Error('Expected the authenticated fixture user');
+    }
+
+    const response = await agent
+      .get(path)
+      .query({
+        status: 'done',
+        search: ' ship ',
+        page: '2',
+        pageSize: '5',
+      })
+      .expect(200);
+
+    expect(fixture.listForMember).toHaveBeenCalledTimes(1);
+
+    expect(fixture.listForMember).toHaveBeenCalledWith(user.id, workspaceId, {
+      status: 'done',
+      search: 'ship',
+      page: 2,
+      pageSize: 5,
+    });
+
+    expect(response.body).toEqual({
+      data: [task],
+      meta: {
+        page: 2,
+        pageSize: 5,
+        total: 6,
+        totalPages: 2,
+      },
+    });
+  });
+
+  it('applies pagination defaults and returns an accessible empty page', async () => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent.get(path).expect(200);
+
+    expect(fixture.listForMember).toHaveBeenCalledWith(
+      expect.any(String),
+      workspaceId,
+      {
+        page: 1,
+        pageSize: 20,
+      }
+    );
+
+    expect(response.body).toEqual({
+      data: [],
+      meta: {
+        page: 1,
+        pageSize: 20,
+        total: 0,
+        totalPages: 0,
+      },
+    });
+  });
+
+  it('maps an unavailable workspace to the application 404 response', async () => {
+    const fixture = createFixture(null);
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent.get(path).expect(404);
+
+    expect(fixture.listForMember).toHaveBeenCalledTimes(1);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'WORKSPACE_NOT_FOUND',
+        message: 'Workspace not found',
+      },
+    });
+  });
+
+  it('rejects a malformed workspace ID before calling task storage', async () => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent
+      .get('/api/workspaces/not-a-uuid/tasks')
+      .expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(fixture.listForMember).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      caseName: 'an unsupported status',
+      query: { status: 'archived' },
+    },
+    {
+      caseName: 'a page below one',
+      query: { page: '0' },
+    },
+    {
+      caseName: 'an excessive page size',
+      query: { pageSize: '101' },
+    },
+    {
+      caseName: 'a whitespace-only search',
+      query: { search: '   ' },
+    },
+    {
+      caseName: 'a client-supplied user ID',
+      query: {
+        userId: '00000000-0000-4000-8000-000000000103',
+      },
+    },
+  ])('rejects $caseName before calling task storage', async ({ query }) => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent.get(path).query(query).expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(fixture.listForMember).not.toHaveBeenCalled();
   });
 });

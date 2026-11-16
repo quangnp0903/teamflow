@@ -21,6 +21,10 @@ import type { WorkspaceRepository } from './modules/workspaces/workspace.reposit
 import { WorkspaceService } from './modules/workspaces/workspace.service.ts';
 import { WorkspaceController } from './modules/workspaces/workspace.controller.ts';
 import { createWorkspaceRouter } from './modules/workspaces/workspace.routes.ts';
+import type { WorkspaceTaskRepository } from './modules/workspace-tasks/workspace-task.repository.ts';
+import { WorkspaceTaskService } from './modules/workspace-tasks/workspace-task.service.ts';
+import { WorkspaceTaskController } from './modules/workspace-tasks/workspace-task.controller.ts';
+import { createWorkspaceTaskRouter } from './modules/workspace-tasks/workspace-task.routes.ts';
 
 type AppDependencies = {
   taskRepository: TaskRepository;
@@ -31,6 +35,7 @@ type AppDependencies = {
   secureSessionCookie: boolean;
   trustedOrigins: readonly string[];
   workspaceRepository: WorkspaceRepository;
+  workspaceTaskRepository: WorkspaceTaskRepository;
 };
 
 export function createApp({
@@ -42,6 +47,7 @@ export function createApp({
   secureSessionCookie,
   trustedOrigins,
   workspaceRepository,
+  workspaceTaskRepository,
 }: AppDependencies) {
   const app = express();
 
@@ -82,6 +88,14 @@ export function createApp({
   );
   const workspaceController = new WorkspaceController(workspaceService);
 
+  const workspaceTaskService = new WorkspaceTaskService(
+    workspaceTaskRepository
+  );
+
+  const workspaceTaskController = new WorkspaceTaskController(
+    workspaceTaskService
+  );
+
   const authenticate = requireAuth(authService);
 
   app.get('/api/health', (_request, response) => {
@@ -95,7 +109,8 @@ export function createApp({
   app.use(
     '/api/workspaces',
     authenticate,
-    createWorkspaceRouter(workspaceController)
+    createWorkspaceRouter(workspaceController),
+    createWorkspaceTaskRouter(workspaceTaskController)
   );
 
   app.use((_request, response) => {

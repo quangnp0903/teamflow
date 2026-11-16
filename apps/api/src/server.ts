@@ -7,6 +7,7 @@ import { PrismaUserRepository } from './modules/users/prisma-user.repository.ts'
 import { CryptoSessionTokenManager } from './modules/auth/crypto-session-token-manager.ts';
 import { PrismaSessionRepository } from './modules/sessions/prisma-session.repository.ts';
 import { PrismaWorkspaceRepository } from './modules/workspaces/prisma-workspace.repository.ts';
+import { PrismaWorkspaceTaskRepository } from './modules/workspace-tasks/prisma-workspace-task.repository.ts';
 
 const taskRepository = new PrismaTaskRepository(prisma);
 const userRepository = new PrismaUserRepository(prisma);
@@ -14,10 +15,12 @@ const passwordHasher = new Argon2PasswordHasher();
 const sessionRepository = new PrismaSessionRepository(prisma);
 const sessionTokenManager = new CryptoSessionTokenManager();
 const workspaceRepository = new PrismaWorkspaceRepository(prisma);
+const workspaceTaskRepository = new PrismaWorkspaceTaskRepository(prisma);
 
 const app = createApp({
   taskRepository,
   workspaceRepository,
+  workspaceTaskRepository,
   userRepository,
   sessionRepository,
   passwordHasher,
