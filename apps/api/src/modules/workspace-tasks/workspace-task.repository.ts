@@ -12,6 +12,11 @@ export type WorkspaceTaskPage = Readonly<{
   total: number;
 }>;
 
+export type CreateWorkspaceTaskRecord = Pick<
+  WorkspaceTask,
+  'title' | 'description'
+>;
+
 export interface WorkspaceTaskRepository {
   /**
    * Returns null when the workspace is missing or the requester
@@ -22,4 +27,14 @@ export interface WorkspaceTaskRepository {
     workspaceId: string,
     query: ListWorkspaceTasksQuery
   ): Promise<WorkspaceTaskPage | null>;
+
+  /**
+   * Creates a task when the requester can connect to the workspace
+   * as a current member. Returns null when that context is unavailable.
+   */
+  createForMember(
+    userId: string,
+    workspaceId: string,
+    input: CreateWorkspaceTaskRecord
+  ): Promise<WorkspaceTask | null>;
 }

@@ -316,4 +316,148 @@ describe('PrismaWorkspaceTaskRepository', () => {
       total: 2,
     });
   });
+
+  it.each(['owner', 'admin', 'member'] as const)(
+    'allows a current %s to create a persisted task with server defaults',
+    async (role) => {
+      const workspaceId = await createWorkspace();
+
+      const input = {
+        title: 'Create a shared task',
+        description: 'Stored through the workspace task repository',
+      };
+
+      const task = await repository.createForMember(
+        userIds[role],
+        workspaceId,
+        input
+      );
+
+      if (task === null) {
+        throw new Error('Expected task creation for a current member');
+      }
+
+      expect(task).toMatchObject({
+        workspaceId,
+        createdById: userIds[role],
+        title: input.title,
+        description: input.description,
+        status: 'todo',
+      });
+
+      const stored = await prisma.task.findUniqueOrThrow({
+        where: { id: task.id },
+      });
+
+      expect(stored).toMatchObject({
+        workspaceId,
+        ownerId: userIds[role],
+        title: input.title,
+        description: input.description,
+        status: 'todo',
+      });
+    }
+  );
+
+  it('rejects a member of another workspace without inserting a task', async () => {
+    const allowedWorkspaceId = await createWorkspace();
+    const targetWorkspaceId = await createWorkspace();
+
+    await prisma.workspaceMember.create({
+      data: {
+        workspaceId: allowedWorkspaceId,
+        userId: userIds.outsider,
+        role: 'member',
+      },
+    });
+
+    const before = await prisma.task.count({
+      where: { ownerId: userIds.outsider },
+    });
+
+    await expect(
+      repository.createForMember(userIds.outsider, targetWorkspaceId, {
+        title: 'Unauthorized task',
+        description: null,
+      })
+    ).resolves.toBeNull();
+
+    await expect(
+      prisma.task.count({
+        where: { ownerId: userIds.outsider },
+      })
+    ).resolves.toBe(before);
+
+    await expect(
+      prisma.task.count({
+        where: { workspaceId: targetWorkspaceId },
+      })
+    ).resolves.toBe(0);
+  });
+
+  it('returns null for a missing workspace without inserting a task', async () => {
+    const before = await prisma.task.count({
+      where: { ownerId: userIds.member },
+    });
+
+    await expect(
+      repository.createForMember(userIds.member, randomUUID(), {
+        title: 'Task for a missing workspace',
+        description: null,
+      })
+    ).resolves.toBeNull();
+
+    await expect(
+      prisma.task.count({
+        where: { ownerId: userIds.member },
+      })
+    ).resolves.toBe(before);
+  });
+
+  it('rejects further creation after the requester is removed', async () => {
+    const workspaceId = await createWorkspace();
+
+    await expect(
+      repository.createForMember(userIds.member, workspaceId, {
+        title: 'Created before removal',
+        description: null,
+      })
+    ).resolves.toMatchObject({
+      workspaceId,
+      createdById: userIds.member,
+      status: 'todo',
+    });
+
+    const before = await prisma.task.count({
+      where: { ownerId: userIds.member },
+    });
+
+    await prisma.workspaceMember.delete({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId: userIds.member,
+        },
+      },
+    });
+
+    await expect(
+      repository.createForMember(userIds.member, workspaceId, {
+        title: 'Attempted after removal',
+        description: null,
+      })
+    ).resolves.toBeNull();
+
+    await expect(
+      prisma.task.count({
+        where: { ownerId: userIds.member },
+      })
+    ).resolves.toBe(before);
+
+    await expect(
+      prisma.task.count({
+        where: { workspaceId },
+      })
+    ).resolves.toBe(1);
+  });
 });

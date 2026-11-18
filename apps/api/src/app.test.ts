@@ -31,6 +31,9 @@ function createTestApp(
     async listForMember() {
       return null;
     },
+    async createForMember() {
+      return null;
+    },
   }
 ) {
   return createApp({
@@ -2309,6 +2312,9 @@ describe('workspace task listing API', () => {
 
     const app = createTestApp(undefined, userRepository, {
       listForMember,
+      async createForMember() {
+        return null;
+      },
     });
 
     return { app, listForMember, userRepository };

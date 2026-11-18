@@ -1,10 +1,34 @@
-import { Prisma, type PrismaClient } from '../../generated/prisma/client.ts';
+import type { WorkspaceTask } from '@teamflow/contracts/tasks';
+
+import {
+  Prisma,
+  type PrismaClient,
+  type Task as PrismaTask,
+} from '../../generated/prisma/client.ts';
 
 import type {
   ListWorkspaceTasksQuery,
   WorkspaceTaskPage,
   WorkspaceTaskRepository,
+  CreateWorkspaceTaskRecord,
 } from './workspace-task.repository.ts';
+
+function toWorkspaceTask(task: PrismaTask): WorkspaceTask {
+  if (task.workspaceId === null) {
+    throw new Error('Expected a task belonging to a workspace');
+  }
+
+  return {
+    id: task.id,
+    workspaceId: task.workspaceId,
+    createdById: task.ownerId,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    createdAt: task.createdAt.toISOString(),
+    updatedAt: task.updatedAt.toISOString(),
+  };
+}
 
 export class PrismaWorkspaceTaskRepository implements WorkspaceTaskRepository {
   private readonly client: PrismaClient;
@@ -75,17 +99,50 @@ export class PrismaWorkspaceTaskRepository implements WorkspaceTaskRepository {
     }
 
     return {
-      items: workspace.tasks.map((task) => ({
-        id: task.id,
-        workspaceId: workspace.id,
-        createdById: task.ownerId,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        createdAt: task.createdAt.toISOString(),
-        updatedAt: task.updatedAt.toISOString(),
-      })),
+      items: workspace.tasks.map(toWorkspaceTask),
       total: workspace._count.tasks,
     };
+  }
+
+  async createForMember(
+    userId: string,
+    workspaceId: string,
+    input: CreateWorkspaceTaskRecord
+  ): Promise<WorkspaceTask | null> {
+    try {
+      const task = await this.client.task.create({
+        data: {
+          title: input.title,
+          description: input.description,
+          status: 'todo',
+          owner: {
+            connect: {
+              id: userId,
+            },
+          },
+          workspace: {
+            connect: {
+              id: workspaceId,
+              members: {
+                some: {
+                  userId,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return toWorkspaceTask(task);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
   }
 }
