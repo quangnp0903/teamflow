@@ -2473,3 +2473,189 @@ describe('workspace task listing API', () => {
     expect(fixture.listForMember).not.toHaveBeenCalled();
   });
 });
+
+describe('workspace task creation API', () => {
+  const workspaceId = '00000000-0000-4000-8000-000000000200';
+  const path = `/api/workspaces/${workspaceId}/tasks`;
+
+  function createFixture() {
+    const createForMember = vi
+      .fn<WorkspaceTaskRepository['createForMember']>()
+      .mockResolvedValue(null);
+
+    const userRepository = new InMemoryUserRepository();
+
+    const app = createTestApp(undefined, userRepository, {
+      async listForMember() {
+        return null;
+      },
+      createForMember,
+    });
+
+    return { app, createForMember, userRepository };
+  }
+
+  it.each([
+    {
+      caseName: 'trims the description',
+      body: {
+        title: '  Plan release  ',
+        description: '  Release details  ',
+      },
+      expectedDescription: 'Release details',
+    },
+    {
+      caseName: 'defaults an omitted description to null',
+      body: {
+        title: '  Plan release  ',
+      },
+      expectedDescription: null,
+    },
+  ])('creates a task and $caseName', async ({ body, expectedDescription }) => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const user = await fixture.userRepository.findByEmail(
+      'task-owner@example.com'
+    );
+
+    if (user === null) {
+      throw new Error('Expected the authenticated fixture user');
+    }
+
+    const task = {
+      id: '00000000-0000-4000-8000-000000000201',
+      workspaceId,
+      createdById: user.id,
+      title: 'Plan release',
+      description: expectedDescription,
+      status: 'todo',
+      createdAt: '2026-11-18T00:00:00.000Z',
+      updatedAt: '2026-11-18T00:00:00.000Z',
+    } satisfies WorkspaceTask;
+
+    fixture.createForMember.mockResolvedValue(task);
+
+    const response = await agent.post(path).send(body).expect(201);
+
+    expect(fixture.createForMember).toHaveBeenCalledTimes(1);
+
+    expect(fixture.createForMember).toHaveBeenCalledWith(user.id, workspaceId, {
+      title: 'Plan release',
+      description: expectedDescription,
+    });
+
+    expect(response.body).toEqual({
+      data: task,
+    });
+  });
+
+  it('rejects an anonymous request before calling task storage', async () => {
+    const fixture = createFixture();
+
+    const response = await browserRequest(fixture.app)
+      .post(path)
+      .send({ title: 'Plan release' })
+      .expect(401);
+
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    expect(fixture.createForMember).not.toHaveBeenCalled();
+  });
+
+  it('rejects an untrusted origin before calling task storage', async () => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent
+      .post(path)
+      .set('Origin', 'https://untrusted.example')
+      .send({ title: 'Plan release' })
+      .expect(403);
+
+    expect(response.body.error.code).toBe('UNTRUSTED_ORIGIN');
+    expect(fixture.createForMember).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed workspace ID before calling task storage', async () => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent
+      .post('/api/workspaces/not-a-uuid/tasks')
+      .send({ title: 'Plan release' })
+      .expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(fixture.createForMember).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      caseName: 'a missing title',
+      body: {},
+    },
+    {
+      caseName: 'a whitespace-only title',
+      body: { title: '   ' },
+    },
+    {
+      caseName: 'an excessive title length',
+      body: { title: 'x'.repeat(121) },
+    },
+    {
+      caseName: 'an excessive description length',
+      body: {
+        title: 'Plan release',
+        description: 'x'.repeat(1_001),
+      },
+    },
+    {
+      caseName: 'a client-supplied creator',
+      body: {
+        title: 'Plan release',
+        createdById: '00000000-0000-4000-8000-000000000202',
+      },
+    },
+    {
+      caseName: 'a client-supplied workspace',
+      body: {
+        title: 'Plan release',
+        workspaceId,
+      },
+    },
+    {
+      caseName: 'a client-supplied status',
+      body: {
+        title: 'Plan release',
+        status: 'done',
+      },
+    },
+  ])('rejects $caseName before calling task storage', async ({ body }) => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent.post(path).send(body).expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(fixture.createForMember).not.toHaveBeenCalled();
+  });
+
+  it('returns the application 404 response when creation is unavailable', async () => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent
+      .post(path)
+      .send({ title: 'Plan release' })
+      .expect(404);
+
+    expect(fixture.createForMember).toHaveBeenCalledTimes(1);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'WORKSPACE_NOT_FOUND',
+        message: 'Workspace not found',
+      },
+    });
+  });
+});

@@ -3,8 +3,9 @@ import type { Request, Response } from 'express';
 import { AppError } from '../../lib/errors/app-error.ts';
 
 import {
+  createWorkspaceTaskSchema,
   listWorkspaceTasksQuerySchema,
-  workspaceTaskListParamsSchema,
+  workspaceTaskCollectionParamsSchema,
 } from './workspace-task.schema.ts';
 import type { WorkspaceTaskService } from './workspace-task.service.ts';
 
@@ -22,7 +23,9 @@ export class WorkspaceTaskController {
       throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
     }
 
-    const { workspaceId } = workspaceTaskListParamsSchema.parse(request.params);
+    const { workspaceId } = workspaceTaskCollectionParamsSchema.parse(
+      request.params
+    );
 
     const query = listWorkspaceTasksQuerySchema.parse(request.query);
 
@@ -40,6 +43,30 @@ export class WorkspaceTaskController {
         total: page.total,
         totalPages: Math.ceil(page.total / query.pageSize),
       },
+    });
+  };
+
+  create = async (request: Request, response: Response) => {
+    const user = request.user;
+
+    if (user === undefined) {
+      throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required');
+    }
+
+    const { workspaceId } = workspaceTaskCollectionParamsSchema.parse(
+      request.params
+    );
+
+    const input = createWorkspaceTaskSchema.parse(request.body);
+
+    const task = await this.service.createWorkspaceTask(
+      user.id,
+      workspaceId,
+      input
+    );
+
+    response.status(201).json({
+      data: task,
     });
   };
 }

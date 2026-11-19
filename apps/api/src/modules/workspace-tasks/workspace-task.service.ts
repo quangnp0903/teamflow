@@ -1,5 +1,9 @@
-import { AppError } from '../../lib/errors/app-error.ts';
+import type {
+  CreateWorkspaceTaskInput,
+  WorkspaceTask,
+} from '@teamflow/contracts/tasks';
 
+import { AppError } from '../../lib/errors/app-error.ts';
 import type {
   ListWorkspaceTasksQuery,
   WorkspaceTaskPage,
@@ -29,5 +33,22 @@ export class WorkspaceTaskService {
     }
 
     return page;
+  }
+
+  async createWorkspaceTask(
+    userId: string,
+    workspaceId: string,
+    input: CreateWorkspaceTaskInput
+  ): Promise<WorkspaceTask> {
+    const task = await this.repository.createForMember(userId, workspaceId, {
+      title: input.title,
+      description: input.description ?? null,
+    });
+
+    if (task === null) {
+      throw new AppError(404, 'WORKSPACE_NOT_FOUND', 'Workspace not found');
+    }
+
+    return task;
   }
 }
