@@ -8,6 +8,7 @@ import useWorkspace from '../hooks/useWorkspace';
 import { WORKSPACE_ROLE_LABELS } from '../workspace.constants';
 import WorkspaceMembersPanel from '../components/WorkspaceMembersPanel/WorkspaceMembersPanel';
 import RenameWorkspaceForm from '../components/RenameWorkspaceForm/RenameWorkspaceForm';
+import WorkspaceTasksPanel from 'src/features/workspace-tasks/components/WorkspaceTasksPanel/WorkspaceTasksPanel';
 import styles from './WorkspaceDetailsPage.module.css';
 
 type WorkspaceDetailsProps = Readonly<{
@@ -82,6 +83,12 @@ const WorkspaceDetails: FC<WorkspaceDetailsProps> = ({ workspaceId }) => {
           </dl>
         )}
       </section>
+      {state.status === 'success' && (
+        <WorkspaceTasksPanel
+          key={state.workspace.id}
+          workspaceId={state.workspace.id}
+        />
+      )}
       {state.status === 'success' && (
         <WorkspaceMembersPanel
           workspaceId={state.workspace.id}

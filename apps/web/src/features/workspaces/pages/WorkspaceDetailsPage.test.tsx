@@ -16,12 +16,18 @@ import {
   renameWorkspace,
   addWorkspaceMember,
 } from '../api/workspace.api';
+import { listWorkspaceTasks } from 'src/features/workspace-tasks/api/workspace-task.api';
 import { workspaceRoutes } from '../workspace.routes';
 import type {
   Workspace,
   WorkspaceMemberSummary,
   WorkspaceWithRole,
 } from '../workspace.types';
+
+vi.mock('src/features/workspace-tasks/api/workspace-task.api', () => ({
+  listWorkspaceTasks: vi.fn(),
+  createWorkspaceTask: vi.fn(),
+}));
 
 vi.mock('../api/workspace.api', () => ({
   getWorkspace: vi.fn(),
@@ -38,6 +44,7 @@ const getWorkspaceMock = vi.mocked(getWorkspace);
 const listWorkspaceMembersMock = vi.mocked(listWorkspaceMembers);
 const renameWorkspaceMock = vi.mocked(renameWorkspace);
 const addWorkspaceMemberMock = vi.mocked(addWorkspaceMember);
+const listWorkspaceTasksMock = vi.mocked(listWorkspaceTasks);
 
 const TEST_WORKSPACE = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -144,6 +151,15 @@ beforeEach(() => {
   listWorkspaceMembersMock.mockReset().mockResolvedValue([]);
   renameWorkspaceMock.mockReset();
   addWorkspaceMemberMock.mockReset();
+  listWorkspaceTasksMock.mockReset().mockResolvedValue({
+    data: [],
+    meta: {
+      page: 1,
+      pageSize: 10,
+      total: 0,
+      totalPages: 0,
+    },
+  });
 });
 
 afterEach(() => {
