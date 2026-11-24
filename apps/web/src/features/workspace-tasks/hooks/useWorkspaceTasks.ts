@@ -4,10 +4,12 @@ import { ApiError } from 'src/lib/http';
 
 import {
   createWorkspaceTask as createWorkspaceTaskRequest,
+  updateWorkspaceTaskStatus as updateWorkspaceTaskStatusRequest,
   listWorkspaceTasks,
 } from '../api/workspace-task.api';
 import type {
   CreateWorkspaceTaskInput,
+  UpdateWorkspaceTaskStatusInput,
   WorkspaceTaskPage,
 } from '../workspace-task.types';
 
@@ -51,6 +53,33 @@ function useWorkspaceTasks(workspaceId: string) {
   async function createTask(input: CreateWorkspaceTaskInput): Promise<void> {
     await createWorkspaceTaskRequest(workspaceId, input);
     refresh(1);
+  }
+
+  async function updateTaskStatus(
+    taskId: string,
+    input: UpdateWorkspaceTaskStatusInput
+  ): Promise<void> {
+    const updatedTask = await updateWorkspaceTaskStatusRequest(
+      workspaceId,
+      taskId,
+      input
+    );
+
+    setState((currentState) => {
+      if (currentState.status !== 'success') {
+        return currentState;
+      }
+
+      return {
+        status: 'success',
+        result: {
+          ...currentState.result,
+          data: currentState.result.data.map((task) =>
+            task.id === updatedTask.id ? updatedTask : task
+          ),
+        },
+      };
+    });
   }
 
   useEffect(() => {
@@ -105,7 +134,7 @@ function useWorkspaceTasks(workspaceId: string) {
     };
   }, [workspaceId, page, refreshVersion]);
 
-  return { state, retry, changePage, createTask };
+  return { state, retry, changePage, createTask, updateTaskStatus };
 }
 
 export default useWorkspaceTasks;

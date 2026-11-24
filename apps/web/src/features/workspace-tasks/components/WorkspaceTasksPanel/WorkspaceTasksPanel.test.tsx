@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   afterAll,
@@ -13,6 +13,7 @@ import {
 import {
   createWorkspaceTask,
   listWorkspaceTasks,
+  updateWorkspaceTaskStatus,
 } from '../../api/workspace-task.api';
 import type {
   WorkspaceTask,
@@ -23,10 +24,12 @@ import WorkspaceTasksPanel from './WorkspaceTasksPanel';
 vi.mock('../../api/workspace-task.api', () => ({
   listWorkspaceTasks: vi.fn(),
   createWorkspaceTask: vi.fn(),
+  updateWorkspaceTaskStatus: vi.fn(),
 }));
 
 const listTasksMock = vi.mocked(listWorkspaceTasks);
 const createTaskMock = vi.mocked(createWorkspaceTask);
+const updateStatusMock = vi.mocked(updateWorkspaceTaskStatus);
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -108,14 +111,20 @@ beforeEach(() => {
     .mockResolvedValue(SAVED_PAGE);
 
   createTaskMock.mockReset().mockResolvedValue(CREATED_TASK);
+  updateStatusMock.mockReset();
 });
 
 async function renderAndOpenDialog() {
   const user = userEvent.setup();
 
-  render(<WorkspaceTasksPanel workspaceId={WORKSPACE_ID} />, {
-    reactStrictMode: false,
-  });
+  render(
+    <WorkspaceTasksPanel
+      workspaceId={WORKSPACE_ID}
+      requesterId={CREATED_TASK.createdById}
+      requesterRole="member"
+    />,
+    { reactStrictMode: false }
+  );
 
   const newTaskButton = screen.getByRole('button', {
     name: 'New task',
@@ -237,5 +246,98 @@ describe('WorkspaceTasksPanel', () => {
     await waitFor(() => {
       expect(dialog).not.toHaveAttribute('open');
     });
+  });
+
+  it('blocks conflicting actions while a status update is pending', async () => {
+    const user = userEvent.setup();
+
+    listTasksMock.mockReset().mockResolvedValue({
+      data: [
+        CREATED_TASK,
+        ...Array.from({ length: 9 }, (_, index) => ({
+          ...CREATED_TASK,
+          id: '00000000-0000-4000-8000-' + String(index + 10).padStart(12, '0'),
+          title: `Other task ${index + 1}`,
+        })),
+      ],
+      meta: {
+        page: 1,
+        pageSize: 10,
+        total: 11,
+        totalPages: 2,
+      },
+    });
+
+    let finishUpdate: ((task: WorkspaceTask) => void) | undefined;
+
+    updateStatusMock.mockImplementationOnce(
+      () =>
+        new Promise<WorkspaceTask>((resolve) => {
+          finishUpdate = resolve;
+        })
+    );
+
+    render(
+      <WorkspaceTasksPanel
+        workspaceId={WORKSPACE_ID}
+        requesterId={CREATED_TASK.createdById}
+        requesterRole="member"
+      />,
+      { reactStrictMode: false }
+    );
+
+    const statusSelect = await screen.findByRole('combobox', {
+      name: 'Status for Ship',
+    });
+
+    const refreshButton = screen.getByRole('button', {
+      name: 'Refresh',
+    });
+
+    const newTaskButton = screen.getByRole('button', {
+      name: 'New task',
+    });
+
+    const nextPageButton = screen.getByRole('button', {
+      name: 'Next',
+    });
+
+    expect(nextPageButton).toBeEnabled();
+
+    await user.selectOptions(statusSelect, 'in_progress');
+
+    expect(statusSelect).toBeDisabled();
+    expect(refreshButton).toBeDisabled();
+    expect(newTaskButton).toBeDisabled();
+    expect(nextPageButton).toBeDisabled();
+
+    expect(updateStatusMock).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      CREATED_TASK.id,
+      { status: 'in_progress' }
+    );
+
+    if (finishUpdate === undefined) {
+      throw new Error('Expected a pending status update');
+    }
+
+    const completeUpdate = finishUpdate;
+
+    await act(async () => {
+      completeUpdate({
+        ...CREATED_TASK,
+        status: 'in_progress',
+      });
+    });
+
+    await waitFor(() => {
+      expect(statusSelect).toHaveValue('in_progress');
+      expect(statusSelect).toBeEnabled();
+      expect(refreshButton).toBeEnabled();
+      expect(newTaskButton).toBeEnabled();
+      expect(nextPageButton).toBeEnabled();
+    });
+
+    expect(listTasksMock).toHaveBeenCalledOnce();
   });
 });

@@ -1,5 +1,6 @@
 import type {
   CreateWorkspaceTaskInput,
+  UpdateWorkspaceTaskStatusInput,
   WorkspaceTask,
 } from '@teamflow/contracts/tasks';
 
@@ -47,6 +48,30 @@ export class WorkspaceTaskService {
 
     if (task === null) {
       throw new AppError(404, 'WORKSPACE_NOT_FOUND', 'Workspace not found');
+    }
+
+    return task;
+  }
+
+  async updateTaskStatus(
+    userId: string,
+    workspaceId: string,
+    taskId: string,
+    input: UpdateWorkspaceTaskStatusInput
+  ): Promise<WorkspaceTask> {
+    const task = await this.repository.updateStatusForUser(
+      userId,
+      workspaceId,
+      taskId,
+      input
+    );
+
+    if (task === null) {
+      throw new AppError(
+        404,
+        'TASK_UNAVAILABLE',
+        'Task not found or you do not have permission to update it'
+      );
     }
 
     return task;

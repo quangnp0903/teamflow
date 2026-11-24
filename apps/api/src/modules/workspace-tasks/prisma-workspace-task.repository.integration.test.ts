@@ -460,4 +460,123 @@ describe('PrismaWorkspaceTaskRepository', () => {
       })
     ).resolves.toBe(1);
   });
+
+  describe('status updates', () => {
+    async function createStatusTask(workspaceId: string | null) {
+      return prisma.task.create({
+        data: {
+          ownerId: userIds.member,
+          workspaceId,
+          title: 'Status fixture',
+          description: null,
+          status: 'todo',
+        },
+      });
+    }
+
+    it.each(['owner', 'admin', 'member'] as const)(
+      'allows a current %s to update an eligible task',
+      async (role) => {
+        const workspaceId = await createWorkspace();
+        const task = await createStatusTask(workspaceId);
+
+        await expect(
+          repository.updateStatusForUser(userIds[role], workspaceId, task.id, {
+            status: 'done',
+          })
+        ).resolves.toMatchObject({
+          id: task.id,
+          workspaceId,
+          createdById: userIds.member,
+          status: 'done',
+        });
+
+        const stored = await prisma.task.findUniqueOrThrow({
+          where: { id: task.id },
+        });
+
+        expect(stored).toMatchObject({
+          workspaceId,
+          ownerId: userIds.member,
+          title: task.title,
+          status: 'done',
+        });
+      }
+    );
+
+    it('rejects a current regular member who did not create the task', async () => {
+      const workspaceId = await createWorkspace();
+      const task = await createStatusTask(workspaceId);
+
+      await prisma.workspaceMember.create({
+        data: {
+          workspaceId,
+          userId: userIds.outsider,
+          role: 'member',
+        },
+      });
+
+      await expect(
+        repository.updateStatusForUser(userIds.outsider, workspaceId, task.id, {
+          status: 'done',
+        })
+      ).resolves.toBeNull();
+
+      const stored = await prisma.task.findUniqueOrThrow({
+        where: { id: task.id },
+      });
+
+      expect(stored.status).toBe('todo');
+    });
+
+    it('rejects the creator after their membership is removed', async () => {
+      const workspaceId = await createWorkspace();
+      const task = await createStatusTask(workspaceId);
+
+      await prisma.workspaceMember.delete({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId: userIds.member,
+          },
+        },
+      });
+
+      await expect(
+        repository.updateStatusForUser(userIds.member, workspaceId, task.id, {
+          status: 'done',
+        })
+      ).resolves.toBeNull();
+
+      const stored = await prisma.task.findUniqueOrThrow({
+        where: { id: task.id },
+      });
+
+      expect(stored.status).toBe('todo');
+    });
+
+    it.each(['another workspace', 'personal scope'] as const)(
+      'rejects a task from %s',
+      async (scope) => {
+        const workspaceId = await createWorkspace();
+
+        const taskWorkspaceId =
+          scope === 'another workspace' ? await createWorkspace() : null;
+
+        const task = await createStatusTask(taskWorkspaceId);
+
+        await expect(
+          repository.updateStatusForUser(userIds.member, workspaceId, task.id, {
+            status: 'done',
+          })
+        ).resolves.toBeNull();
+
+        const stored = await prisma.task.findUniqueOrThrow({
+          where: { id: task.id },
+        });
+
+        expect(stored.status).toBe('todo');
+      }
+    );
+  });
 });

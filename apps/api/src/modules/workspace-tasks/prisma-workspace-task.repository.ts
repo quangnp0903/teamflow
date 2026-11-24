@@ -1,4 +1,7 @@
-import type { WorkspaceTask } from '@teamflow/contracts/tasks';
+import type {
+  WorkspaceTask,
+  UpdateWorkspaceTaskStatusInput,
+} from '@teamflow/contracts/tasks';
 
 import {
   Prisma,
@@ -12,6 +15,7 @@ import type {
   WorkspaceTaskRepository,
   CreateWorkspaceTaskRecord,
 } from './workspace-task.repository.ts';
+import { WORKSPACE_MANAGER_ROLES } from '../workspaces/workspace.permission.ts';
 
 function toWorkspaceTask(task: PrismaTask): WorkspaceTask {
   if (task.workspaceId === null) {
@@ -144,5 +148,48 @@ export class PrismaWorkspaceTaskRepository implements WorkspaceTaskRepository {
 
       throw error;
     }
+  }
+
+  async updateStatusForUser(
+    userId: string,
+    workspaceId: string,
+    taskId: string,
+    input: UpdateWorkspaceTaskStatusInput
+  ): Promise<WorkspaceTask | null> {
+    const [task] = await this.client.task.updateManyAndReturn({
+      where: {
+        id: taskId,
+        workspaceId,
+        workspace: {
+          members: {
+            some: {
+              userId,
+            },
+          },
+        },
+        OR: [
+          {
+            ownerId: userId,
+          },
+          {
+            workspace: {
+              members: {
+                some: {
+                  userId,
+                  role: {
+                    in: [...WORKSPACE_MANAGER_ROLES],
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      data: {
+        status: input.status,
+      },
+    });
+
+    return task === undefined ? null : toWorkspaceTask(task);
   }
 }

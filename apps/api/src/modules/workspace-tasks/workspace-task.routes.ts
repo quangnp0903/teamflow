@@ -7,6 +7,7 @@ export function createWorkspaceTaskRouter(controller: WorkspaceTaskController) {
 
   router.get('/:workspaceId/tasks', controller.list);
   router.post('/:workspaceId/tasks', controller.create);
+  router.patch('/:workspaceId/tasks/:taskId', controller.updateStatus);
 
   return router;
 }

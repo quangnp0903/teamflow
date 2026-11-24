@@ -1,4 +1,8 @@
-import type { TaskStatus, WorkspaceTask } from '@teamflow/contracts/tasks';
+import type {
+  TaskStatus,
+  WorkspaceTask,
+  UpdateWorkspaceTaskStatusInput,
+} from '@teamflow/contracts/tasks';
 
 export type ListWorkspaceTasksQuery = Readonly<{
   status?: TaskStatus | undefined;
@@ -36,5 +40,17 @@ export interface WorkspaceTaskRepository {
     userId: string,
     workspaceId: string,
     input: CreateWorkspaceTaskRecord
+  ): Promise<WorkspaceTask | null>;
+
+  /**
+   * Updates a task when the requester is a current member and
+   * either its creator or a workspace owner/admin.
+   * Returns null when no task matches that permission scope.
+   */
+  updateStatusForUser(
+    userId: string,
+    workspaceId: string,
+    taskId: string,
+    input: UpdateWorkspaceTaskStatusInput
   ): Promise<WorkspaceTask | null>;
 }

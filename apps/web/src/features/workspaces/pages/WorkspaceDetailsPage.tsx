@@ -16,7 +16,7 @@ type WorkspaceDetailsProps = Readonly<{
 }>;
 
 const WorkspaceDetails: FC<WorkspaceDetailsProps> = ({ workspaceId }) => {
-  const { logout } = useAuth();
+  const { state: authState, logout } = useAuth();
   const { state, retry, renameWorkspace } = useWorkspace(workspaceId);
 
   return (
@@ -83,10 +83,12 @@ const WorkspaceDetails: FC<WorkspaceDetailsProps> = ({ workspaceId }) => {
           </dl>
         )}
       </section>
-      {state.status === 'success' && (
+      {state.status === 'success' && authState.status === 'authenticated' && (
         <WorkspaceTasksPanel
           key={state.workspace.id}
           workspaceId={state.workspace.id}
+          requesterId={authState.user.id}
+          requesterRole={state.workspace.role}
         />
       )}
       {state.status === 'success' && (

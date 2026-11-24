@@ -2,6 +2,7 @@ import type { WorkspaceTask } from '@teamflow/contracts/tasks';
 
 export type {
   CreateWorkspaceTaskInput,
+  UpdateWorkspaceTaskStatusInput,
   WorkspaceTask,
 } from '@teamflow/contracts/tasks';
 

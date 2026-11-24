@@ -17,3 +17,5 @@ export type CreateWorkspaceTaskInput = Readonly<{
   title: string;
   description?: string | null;
 }>;
+
+export type UpdateWorkspaceTaskStatusInput = Pick<WorkspaceTask, 'status'>;

@@ -1,16 +1,22 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
-import type { TaskStatus } from '@teamflow/contracts/tasks';
+import { TASK_STATUSES, type TaskStatus } from '@teamflow/contracts/tasks';
+import type { WorkspaceRole } from '@teamflow/contracts/workspaces';
 
 import CreateTaskForm from 'src/features/tasks/components/CreateTaskForm/CreateTaskForm';
 import TaskPagination from 'src/features/tasks/components/TaskPagination/TaskPagination';
 
 import useWorkspaceTasks from '../../hooks/useWorkspaceTasks';
-import type { CreateWorkspaceTaskInput } from '../../workspace-task.types';
+import type {
+  CreateWorkspaceTaskInput,
+  WorkspaceTask,
+} from '../../workspace-task.types';
 import styles from './WorkspaceTasksPanel.module.css';
 
 type WorkspaceTasksPanelProps = Readonly<{
   workspaceId: string;
+  requesterId: string;
+  requesterRole: WorkspaceRole;
 }>;
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -19,21 +25,68 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   done: 'Done',
 };
 
-function WorkspaceTasksPanel({ workspaceId }: WorkspaceTasksPanelProps) {
-  const { state, retry, changePage, createTask } =
+function WorkspaceTasksPanel({
+  workspaceId,
+  requesterId,
+  requesterRole,
+}: WorkspaceTasksPanelProps) {
+  const { state, retry, changePage, createTask, updateTaskStatus } =
     useWorkspaceTasks(workspaceId);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+
+  const [statusError, setStatusError] = useState<Readonly<{
+    taskId: string;
+    message: string;
+  }> | null>(null);
+
+  const statusErrorId = useId();
+  const isBusy = isSaving || updatingTaskId !== null;
+
+  const canManageAllTasks =
+    requesterRole === 'owner' || requesterRole === 'admin';
 
   async function handleCreate(input: CreateWorkspaceTaskInput): Promise<void> {
     setIsSaving(true);
+    setStatusError(null);
 
     try {
       await createTask(input);
       dialogRef.current?.close();
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleStatusChange(
+    task: WorkspaceTask,
+    value: string
+  ): Promise<void> {
+    const nextStatus = TASK_STATUSES.find((status) => status === value);
+
+    if (nextStatus === undefined || nextStatus === task.status || isBusy) {
+      return;
+    }
+
+    setUpdatingTaskId(task.id);
+    setStatusError(null);
+
+    try {
+      await updateTaskStatus(task.id, {
+        status: nextStatus,
+      });
+    } catch (error) {
+      setStatusError({
+        taskId: task.id,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Task status could not be updated',
+      });
+    } finally {
+      setUpdatingTaskId(null);
     }
   }
 
@@ -51,8 +104,11 @@ function WorkspaceTasksPanel({ workspaceId }: WorkspaceTasksPanelProps) {
         <div className={styles.actions}>
           <button
             className={styles.button}
-            disabled={state.status === 'loading' || isSaving}
-            onClick={retry}
+            disabled={state.status === 'loading' || isBusy}
+            onClick={() => {
+              setStatusError(null);
+              retry();
+            }}
             type="button"
           >
             Refresh
@@ -60,7 +116,7 @@ function WorkspaceTasksPanel({ workspaceId }: WorkspaceTasksPanelProps) {
 
           <button
             className={`${styles.button} ${styles.primary}`}
-            disabled={state.status !== 'success' || isSaving}
+            disabled={state.status !== 'success' || isBusy}
             onClick={() => dialogRef.current?.showModal()}
             type="button"
             aria-haspopup="dialog"
@@ -77,6 +133,14 @@ function WorkspaceTasksPanel({ workspaceId }: WorkspaceTasksPanelProps) {
       {state.status === 'not-found' && (
         <p className={styles.error} role="alert">
           This workspace does not exist, or you no longer have access.
+        </p>
+      )}
+
+      {updatingTaskId !== null && <p role="status">Saving task status…</p>}
+
+      {statusError !== null && (
+        <p id={statusErrorId} className={styles.error} role="alert">
+          {statusError.message}
         </p>
       )}
 
@@ -102,20 +166,51 @@ function WorkspaceTasksPanel({ workspaceId }: WorkspaceTasksPanelProps) {
                     )}
                   </div>
 
-                  <span className={styles.badge} data-status={task.status}>
-                    {STATUS_LABELS[task.status]}
-                  </span>
+                  {canManageAllTasks || task.createdById === requesterId ? (
+                    <select
+                      className={`${styles.badge} ${styles.statusSelect}`}
+                      aria-label={`Status for ${task.title}`}
+                      aria-busy={updatingTaskId === task.id}
+                      aria-describedby={
+                        statusError?.taskId === task.id
+                          ? statusErrorId
+                          : undefined
+                      }
+                      data-status={task.status}
+                      disabled={isBusy}
+                      value={task.status}
+                      onChange={(event) => {
+                        void handleStatusChange(
+                          task,
+                          event.currentTarget.value
+                        );
+                      }}
+                    >
+                      {TASK_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {STATUS_LABELS[status]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={styles.badge} data-status={task.status}>
+                      {STATUS_LABELS[task.status]}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
           )}
 
           <TaskPagination
-            disabled={isSaving}
+            disabled={isBusy}
             page={state.result.meta.page}
             total={state.result.meta.total}
             totalPages={state.result.meta.totalPages}
-            onPageChange={changePage}
+            onPageChange={(nextPage) => {
+              setStatusError(null);
+              changePage(nextPage);
+            }}
           />
         </>
       )}
@@ -125,17 +220,20 @@ function WorkspaceTasksPanel({ workspaceId }: WorkspaceTasksPanelProps) {
         className={styles.dialog}
         aria-labelledby="create-task-heading"
         onCancel={(event) => {
-          if (isSaving) {
+          if (isBusy) {
             event.preventDefault();
           }
         }}
       >
-        <CreateTaskForm disabled={isSaving} onCreate={handleCreate} />
+        <CreateTaskForm
+          disabled={state.status !== 'success' || isBusy}
+          onCreate={handleCreate}
+        />
 
         <div className={styles.dialogActions}>
           <button
             className={styles.button}
-            disabled={isSaving}
+            disabled={isBusy}
             onClick={() => dialogRef.current?.close()}
             type="button"
           >

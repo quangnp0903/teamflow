@@ -3,6 +3,7 @@ import { requestJson } from 'src/lib/http';
 import type {
   CreateWorkspaceTaskInput,
   ListWorkspaceTasksParams,
+  UpdateWorkspaceTaskStatusInput,
   WorkspaceTask,
   WorkspaceTaskPage,
 } from '../workspace-task.types';
@@ -51,6 +52,28 @@ export async function createWorkspaceTask(
       body: JSON.stringify({
         title: input.title,
         description: input.description ?? null,
+      }),
+    }
+  );
+
+  return response.data;
+}
+
+export async function updateWorkspaceTaskStatus(
+  workspaceId: string,
+  taskId: string,
+  input: UpdateWorkspaceTaskStatusInput
+): Promise<WorkspaceTask> {
+  const response = await requestJson<Readonly<{ data: WorkspaceTask }>>(
+    `${collectionPath(workspaceId)}/${encodeURIComponent(taskId)}`,
+    {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        status: input.status,
       }),
     }
   );
