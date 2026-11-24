@@ -1,6 +1,6 @@
 import type {
   CreateWorkspaceTaskInput,
-  UpdateWorkspaceTaskStatusInput,
+  UpdateWorkspaceTaskInput,
   WorkspaceTask,
 } from '@teamflow/contracts/tasks';
 
@@ -53,13 +53,13 @@ export class WorkspaceTaskService {
     return task;
   }
 
-  async updateTaskStatus(
+  async updateTask(
     userId: string,
     workspaceId: string,
     taskId: string,
-    input: UpdateWorkspaceTaskStatusInput
+    input: UpdateWorkspaceTaskInput
   ): Promise<WorkspaceTask> {
-    const task = await this.repository.updateStatusForUser(
+    const task = await this.repository.updateForUser(
       userId,
       workspaceId,
       taskId,

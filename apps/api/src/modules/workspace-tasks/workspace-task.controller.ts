@@ -5,7 +5,7 @@ import { AppError } from '../../lib/errors/app-error.ts';
 import {
   createWorkspaceTaskSchema,
   listWorkspaceTasksQuerySchema,
-  updateWorkspaceTaskStatusSchema,
+  updateWorkspaceTaskSchema,
   workspaceTaskCollectionParamsSchema,
   workspaceTaskItemParamsSchema,
 } from './workspace-task.schema.ts';
@@ -72,7 +72,7 @@ export class WorkspaceTaskController {
     });
   };
 
-  updateStatus = async (request: Request, response: Response) => {
+  update = async (request: Request, response: Response) => {
     const user = request.user;
 
     if (user === undefined) {
@@ -83,9 +83,9 @@ export class WorkspaceTaskController {
       request.params
     );
 
-    const input = updateWorkspaceTaskStatusSchema.parse(request.body);
+    const input = updateWorkspaceTaskSchema.parse(request.body);
 
-    const task = await this.service.updateTaskStatus(
+    const task = await this.service.updateTask(
       user.id,
       workspaceId,
       taskId,

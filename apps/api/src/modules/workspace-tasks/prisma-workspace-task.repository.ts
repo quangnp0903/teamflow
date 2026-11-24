@@ -1,6 +1,6 @@
 import type {
   WorkspaceTask,
-  UpdateWorkspaceTaskStatusInput,
+  UpdateWorkspaceTaskInput,
 } from '@teamflow/contracts/tasks';
 
 import {
@@ -150,12 +150,26 @@ export class PrismaWorkspaceTaskRepository implements WorkspaceTaskRepository {
     }
   }
 
-  async updateStatusForUser(
+  async updateForUser(
     userId: string,
     workspaceId: string,
     taskId: string,
-    input: UpdateWorkspaceTaskStatusInput
+    input: UpdateWorkspaceTaskInput
   ): Promise<WorkspaceTask | null> {
+    const data: Prisma.TaskUpdateManyMutationInput = {};
+
+    if (input.title !== undefined) {
+      data.title = input.title;
+    }
+
+    if (input.description !== undefined) {
+      data.description = input.description;
+    }
+
+    if (input.status !== undefined) {
+      data.status = input.status;
+    }
+
     const [task] = await this.client.task.updateManyAndReturn({
       where: {
         id: taskId,
@@ -185,9 +199,7 @@ export class PrismaWorkspaceTaskRepository implements WorkspaceTaskRepository {
           },
         ],
       },
-      data: {
-        status: input.status,
-      },
+      data,
     });
 
     return task === undefined ? null : toWorkspaceTask(task);

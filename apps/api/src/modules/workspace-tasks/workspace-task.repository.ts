@@ -1,7 +1,7 @@
 import type {
   TaskStatus,
   WorkspaceTask,
-  UpdateWorkspaceTaskStatusInput,
+  UpdateWorkspaceTaskInput,
 } from '@teamflow/contracts/tasks';
 
 export type ListWorkspaceTasksQuery = Readonly<{
@@ -47,10 +47,10 @@ export interface WorkspaceTaskRepository {
    * either its creator or a workspace owner/admin.
    * Returns null when no task matches that permission scope.
    */
-  updateStatusForUser(
+  updateForUser(
     userId: string,
     workspaceId: string,
     taskId: string,
-    input: UpdateWorkspaceTaskStatusInput
+    input: UpdateWorkspaceTaskInput
   ): Promise<WorkspaceTask | null>;
 }

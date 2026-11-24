@@ -481,7 +481,7 @@ describe('PrismaWorkspaceTaskRepository', () => {
         const task = await createStatusTask(workspaceId);
 
         await expect(
-          repository.updateStatusForUser(userIds[role], workspaceId, task.id, {
+          repository.updateForUser(userIds[role], workspaceId, task.id, {
             status: 'done',
           })
         ).resolves.toMatchObject({
@@ -517,7 +517,7 @@ describe('PrismaWorkspaceTaskRepository', () => {
       });
 
       await expect(
-        repository.updateStatusForUser(userIds.outsider, workspaceId, task.id, {
+        repository.updateForUser(userIds.outsider, workspaceId, task.id, {
           status: 'done',
         })
       ).resolves.toBeNull();
@@ -543,7 +543,7 @@ describe('PrismaWorkspaceTaskRepository', () => {
       });
 
       await expect(
-        repository.updateStatusForUser(userIds.member, workspaceId, task.id, {
+        repository.updateForUser(userIds.member, workspaceId, task.id, {
           status: 'done',
         })
       ).resolves.toBeNull();
@@ -566,7 +566,7 @@ describe('PrismaWorkspaceTaskRepository', () => {
         const task = await createStatusTask(taskWorkspaceId);
 
         await expect(
-          repository.updateStatusForUser(userIds.member, workspaceId, task.id, {
+          repository.updateForUser(userIds.member, workspaceId, task.id, {
             status: 'done',
           })
         ).resolves.toBeNull();
@@ -578,5 +578,49 @@ describe('PrismaWorkspaceTaskRepository', () => {
         expect(stored.status).toBe('todo');
       }
     );
+  });
+
+  it('updates details without changing status or ownership', async () => {
+    const workspaceId = await createWorkspace();
+
+    const task = await prisma.task.create({
+      data: {
+        ownerId: userIds.member,
+        workspaceId,
+        title: 'Original title',
+        description: 'Details to clear',
+        status: 'in_progress',
+      },
+    });
+
+    const updated = await repository.updateForUser(
+      userIds.member,
+      workspaceId,
+      task.id,
+      {
+        title: 'Revised title',
+        description: null,
+      }
+    );
+
+    expect(updated).toMatchObject({
+      id: task.id,
+      title: 'Revised title',
+      description: null,
+      status: 'in_progress',
+      createdById: userIds.member,
+    });
+
+    const stored = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+
+    expect(stored).toMatchObject({
+      title: 'Revised title',
+      description: null,
+      status: 'in_progress',
+      ownerId: userIds.member,
+      workspaceId,
+    });
   });
 });

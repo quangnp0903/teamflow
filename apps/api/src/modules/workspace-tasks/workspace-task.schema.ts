@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   TASK_STATUSES,
   type CreateWorkspaceTaskInput,
-  type UpdateWorkspaceTaskStatusInput,
+  type UpdateWorkspaceTaskInput,
 } from '@teamflow/contracts/tasks';
 
 import type { ListWorkspaceTasksQuery } from './workspace-task.repository.ts';
@@ -29,6 +29,13 @@ export const workspaceTaskItemParamsSchema = z.strictObject({
   taskId: z.uuid(),
 });
 
-export const updateWorkspaceTaskStatusSchema = z.strictObject({
-  status: z.enum(TASK_STATUSES),
-}) satisfies z.ZodType<UpdateWorkspaceTaskStatusInput>;
+export const updateWorkspaceTaskSchema = z
+  .strictObject({
+    title: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(1_000).nullable().optional(),
+    status: z.enum(TASK_STATUSES).optional(),
+  })
+  .refine(
+    (input) => Object.values(input).some((value) => value !== undefined),
+    { message: 'At least one field must be provided' }
+  ) satisfies z.ZodType<UpdateWorkspaceTaskInput>;

@@ -34,7 +34,7 @@ function createTestApp(
     async createForMember() {
       return null;
     },
-    async updateStatusForUser() {
+    async updateForUser() {
       return null;
     },
   }
@@ -2318,7 +2318,7 @@ describe('workspace task listing API', () => {
       async createForMember() {
         return null;
       },
-      async updateStatusForUser() {
+      async updateForUser() {
         return null;
       },
     });
@@ -2496,7 +2496,7 @@ describe('workspace task creation API', () => {
         return null;
       },
       createForMember,
-      async updateStatusForUser() {
+      async updateForUser() {
         return null;
       },
     });
@@ -2669,14 +2669,14 @@ describe('workspace task creation API', () => {
   });
 });
 
-describe('workspace task status API', () => {
+describe('workspace task updates API', () => {
   const workspaceId = '00000000-0000-4000-8000-000000000300';
   const taskId = '00000000-0000-4000-8000-000000000301';
   const path = `/api/workspaces/${workspaceId}/tasks/${taskId}`;
 
   function createFixture() {
-    const updateStatusForUser = vi
-      .fn<WorkspaceTaskRepository['updateStatusForUser']>()
+    const updateForUser = vi
+      .fn<WorkspaceTaskRepository['updateForUser']>()
       .mockResolvedValue(null);
 
     const userRepository = new InMemoryUserRepository();
@@ -2688,10 +2688,10 @@ describe('workspace task status API', () => {
       async createForMember() {
         return null;
       },
-      updateStatusForUser,
+      updateForUser,
     });
 
-    return { app, userRepository, updateStatusForUser };
+    return { app, userRepository, updateForUser };
   }
 
   it('uses the session identity and returns the updated task', async () => {
@@ -2717,15 +2717,15 @@ describe('workspace task status API', () => {
       updatedAt: '2026-11-23T01:00:00.000Z',
     } satisfies WorkspaceTask;
 
-    fixture.updateStatusForUser.mockResolvedValue(task);
+    fixture.updateForUser.mockResolvedValue(task);
 
     const response = await agent
       .patch(path)
       .send({ status: 'done' })
       .expect(200);
 
-    expect(fixture.updateStatusForUser).toHaveBeenCalledOnce();
-    expect(fixture.updateStatusForUser).toHaveBeenCalledWith(
+    expect(fixture.updateForUser).toHaveBeenCalledOnce();
+    expect(fixture.updateForUser).toHaveBeenCalledWith(
       user.id,
       workspaceId,
       taskId,
@@ -2745,7 +2745,7 @@ describe('workspace task status API', () => {
       .expect(400);
 
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
-    expect(fixture.updateStatusForUser).not.toHaveBeenCalled();
+    expect(fixture.updateForUser).not.toHaveBeenCalled();
   });
 
   it('returns the application error when the task is unavailable', async () => {
@@ -2758,6 +2758,67 @@ describe('workspace task status API', () => {
       .expect(404);
 
     expect(response.body.error.code).toBe('TASK_UNAVAILABLE');
-    expect(fixture.updateStatusForUser).toHaveBeenCalledOnce();
+    expect(fixture.updateForUser).toHaveBeenCalledOnce();
+  });
+
+  it('normalizes task details and allows clearing the description', async () => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const user = await fixture.userRepository.findByEmail(
+      'task-owner@example.com'
+    );
+
+    if (user === null) {
+      throw new Error('Expected the authenticated fixture user');
+    }
+
+    const task = {
+      id: taskId,
+      workspaceId,
+      createdById: user.id,
+      title: 'Prepare the release',
+      description: null,
+      status: 'in_progress',
+      createdAt: '2026-11-23T00:00:00.000Z',
+      updatedAt: '2026-11-24T00:00:00.000Z',
+    } satisfies WorkspaceTask;
+
+    fixture.updateForUser.mockResolvedValue(task);
+
+    const response = await agent
+      .patch(path)
+      .send({
+        title: '  Prepare the release  ',
+        description: null,
+      })
+      .expect(200);
+
+    expect(fixture.updateForUser).toHaveBeenCalledWith(
+      user.id,
+      workspaceId,
+      taskId,
+      {
+        title: 'Prepare the release',
+        description: null,
+      }
+    );
+
+    expect(response.body).toEqual({ data: task });
+  });
+
+  it.each([
+    {},
+    { title: '   ' },
+    { title: 'x'.repeat(121) },
+    { title: 'Valid title', ownerId: 'client-supplied-user' },
+  ])('rejects invalid task edits: %j', async (body) => {
+    const fixture = createFixture();
+    const agent = await authenticatedBrowserRequest(fixture.app);
+
+    const response = await agent.patch(path).send(body).expect(400);
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(fixture.updateForUser).not.toHaveBeenCalled();
   });
 });
