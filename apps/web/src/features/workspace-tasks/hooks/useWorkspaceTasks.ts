@@ -4,12 +4,12 @@ import { ApiError } from 'src/lib/http';
 
 import {
   createWorkspaceTask as createWorkspaceTaskRequest,
-  updateWorkspaceTaskStatus as updateWorkspaceTaskStatusRequest,
+  updateWorkspaceTask as updateWorkspaceTaskRequest,
   listWorkspaceTasks,
 } from '../api/workspace-task.api';
 import type {
   CreateWorkspaceTaskInput,
-  UpdateWorkspaceTaskStatusInput,
+  UpdateWorkspaceTaskInput,
   WorkspaceTaskPage,
 } from '../workspace-task.types';
 
@@ -55,11 +55,11 @@ function useWorkspaceTasks(workspaceId: string) {
     refresh(1);
   }
 
-  async function updateTaskStatus(
+  async function updateTask(
     taskId: string,
-    input: UpdateWorkspaceTaskStatusInput
+    input: UpdateWorkspaceTaskInput
   ): Promise<void> {
-    const updatedTask = await updateWorkspaceTaskStatusRequest(
+    const updatedTask = await updateWorkspaceTaskRequest(
       workspaceId,
       taskId,
       input
@@ -134,7 +134,7 @@ function useWorkspaceTasks(workspaceId: string) {
     };
   }, [workspaceId, page, refreshVersion]);
 
-  return { state, retry, changePage, createTask, updateTaskStatus };
+  return { state, retry, changePage, createTask, updateTask };
 }
 
 export default useWorkspaceTasks;

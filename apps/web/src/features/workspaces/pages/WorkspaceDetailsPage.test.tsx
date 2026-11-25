@@ -27,6 +27,7 @@ import type {
 vi.mock('src/features/workspace-tasks/api/workspace-task.api', () => ({
   listWorkspaceTasks: vi.fn(),
   createWorkspaceTask: vi.fn(),
+  updateWorkspaceTask: vi.fn(),
 }));
 
 vi.mock('../api/workspace.api', () => ({
@@ -38,7 +39,6 @@ vi.mock('../api/workspace.api', () => ({
   addWorkspaceMember: vi.fn(),
   updateWorkspaceMemberRole: vi.fn(),
   removeWorkspaceMember: vi.fn(),
-  updateWorkspaceTaskStatus: vi.fn(),
 }));
 
 const getWorkspaceMock = vi.mocked(getWorkspace);

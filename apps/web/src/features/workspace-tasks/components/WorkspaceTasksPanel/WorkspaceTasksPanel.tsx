@@ -1,15 +1,17 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { TASK_STATUSES, type TaskStatus } from '@teamflow/contracts/tasks';
 import type { WorkspaceRole } from '@teamflow/contracts/workspaces';
 
 import CreateTaskForm from 'src/features/tasks/components/CreateTaskForm/CreateTaskForm';
 import TaskPagination from 'src/features/tasks/components/TaskPagination/TaskPagination';
+import EditTaskForm from 'src/features/tasks/components/EditTaskForm/EditTaskForm';
 
 import useWorkspaceTasks from '../../hooks/useWorkspaceTasks';
 import type {
   CreateWorkspaceTaskInput,
   WorkspaceTask,
+  WorkspaceTaskDetailsInput,
 } from '../../workspace-task.types';
 import styles from './WorkspaceTasksPanel.module.css';
 
@@ -30,7 +32,7 @@ function WorkspaceTasksPanel({
   requesterId,
   requesterRole,
 }: WorkspaceTasksPanelProps) {
-  const { state, retry, changePage, createTask, updateTaskStatus } =
+  const { state, retry, changePage, createTask, updateTask } =
     useWorkspaceTasks(workspaceId);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -42,8 +44,13 @@ function WorkspaceTasksPanel({
     message: string;
   }> | null>(null);
 
+  const editDialogRef = useRef<HTMLDialogElement>(null);
+  const editHeadingId = useId();
+
+  const [editingTask, setEditingTask] = useState<WorkspaceTask | null>(null);
+
   const statusErrorId = useId();
-  const isBusy = isSaving || updatingTaskId !== null;
+  const isBusy = isSaving || updatingTaskId !== null || editingTask !== null;
 
   const canManageAllTasks =
     requesterRole === 'owner' || requesterRole === 'admin';
@@ -74,7 +81,7 @@ function WorkspaceTasksPanel({
     setStatusError(null);
 
     try {
-      await updateTaskStatus(task.id, {
+      await updateTask(task.id, {
         status: nextStatus,
       });
     } catch (error) {
@@ -89,6 +96,42 @@ function WorkspaceTasksPanel({
       setUpdatingTaskId(null);
     }
   }
+
+  async function handleEditSave(
+    input: WorkspaceTaskDetailsInput
+  ): Promise<void> {
+    if (editingTask === null) {
+      return;
+    }
+
+    setIsSaving(true);
+    setStatusError(null);
+
+    try {
+      await updateTask(editingTask.id, input);
+      setEditingTask(null);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  useEffect(() => {
+    if (editingTask === null) {
+      return;
+    }
+
+    const dialog = editDialogRef.current;
+
+    if (dialog === null) {
+      return;
+    }
+
+    dialog.showModal();
+
+    return () => {
+      dialog.close();
+    };
+  }, [editingTask]);
 
   return (
     <section
@@ -167,31 +210,46 @@ function WorkspaceTasksPanel({
                   </div>
 
                   {canManageAllTasks || task.createdById === requesterId ? (
-                    <select
-                      className={`${styles.badge} ${styles.statusSelect}`}
-                      aria-label={`Status for ${task.title}`}
-                      aria-busy={updatingTaskId === task.id}
-                      aria-describedby={
-                        statusError?.taskId === task.id
-                          ? statusErrorId
-                          : undefined
-                      }
-                      data-status={task.status}
-                      disabled={isBusy}
-                      value={task.status}
-                      onChange={(event) => {
-                        void handleStatusChange(
-                          task,
-                          event.currentTarget.value
-                        );
-                      }}
-                    >
-                      {TASK_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {STATUS_LABELS[status]}
-                        </option>
-                      ))}
-                    </select>
+                    <div className={styles.rowActions}>
+                      <select
+                        className={`${styles.badge} ${styles.statusSelect}`}
+                        aria-label={`Status for ${task.title}`}
+                        aria-busy={updatingTaskId === task.id}
+                        aria-describedby={
+                          statusError?.taskId === task.id
+                            ? statusErrorId
+                            : undefined
+                        }
+                        data-status={task.status}
+                        disabled={isBusy}
+                        value={task.status}
+                        onChange={(event) => {
+                          void handleStatusChange(
+                            task,
+                            event.currentTarget.value
+                          );
+                        }}
+                      >
+                        {TASK_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {STATUS_LABELS[status]}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className={styles.button}
+                        disabled={isBusy}
+                        aria-label={`Edit ${task.title}`}
+                        aria-haspopup="dialog"
+                        onClick={() => {
+                          setStatusError(null);
+                          setEditingTask(task);
+                        }}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   ) : (
                     <span className={styles.badge} data-status={task.status}>
                       {STATUS_LABELS[task.status]}
@@ -240,6 +298,36 @@ function WorkspaceTasksPanel({
             Close
           </button>
         </div>
+      </dialog>
+
+      <dialog
+        ref={editDialogRef}
+        className={styles.dialog}
+        aria-labelledby={editHeadingId}
+        onCancel={(event) => {
+          event.preventDefault();
+
+          if (!isSaving) {
+            setEditingTask(null);
+          }
+        }}
+      >
+        {editingTask !== null && (
+          <div className={styles.editContent}>
+            <h2 id={editHeadingId}>Edit task</h2>
+
+            <EditTaskForm
+              key={editingTask.id}
+              task={editingTask}
+              onCancel={() => {
+                if (!isSaving) {
+                  setEditingTask(null);
+                }
+              }}
+              onSave={handleEditSave}
+            />
+          </div>
+        )}
       </dialog>
     </section>
   );

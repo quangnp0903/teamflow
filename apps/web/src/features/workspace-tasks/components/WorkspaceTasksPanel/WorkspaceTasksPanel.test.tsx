@@ -13,7 +13,7 @@ import {
 import {
   createWorkspaceTask,
   listWorkspaceTasks,
-  updateWorkspaceTaskStatus,
+  updateWorkspaceTask,
 } from '../../api/workspace-task.api';
 import type {
   WorkspaceTask,
@@ -24,12 +24,12 @@ import WorkspaceTasksPanel from './WorkspaceTasksPanel';
 vi.mock('../../api/workspace-task.api', () => ({
   listWorkspaceTasks: vi.fn(),
   createWorkspaceTask: vi.fn(),
-  updateWorkspaceTaskStatus: vi.fn(),
+  updateWorkspaceTask: vi.fn(),
 }));
 
 const listTasksMock = vi.mocked(listWorkspaceTasks);
 const createTaskMock = vi.mocked(createWorkspaceTask);
-const updateStatusMock = vi.mocked(updateWorkspaceTaskStatus);
+const updateTaskMock = vi.mocked(updateWorkspaceTask);
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -111,7 +111,7 @@ beforeEach(() => {
     .mockResolvedValue(SAVED_PAGE);
 
   createTaskMock.mockReset().mockResolvedValue(CREATED_TASK);
-  updateStatusMock.mockReset();
+  updateTaskMock.mockReset();
 });
 
 async function renderAndOpenDialog() {
@@ -270,7 +270,7 @@ describe('WorkspaceTasksPanel', () => {
 
     let finishUpdate: ((task: WorkspaceTask) => void) | undefined;
 
-    updateStatusMock.mockImplementationOnce(
+    updateTaskMock.mockImplementationOnce(
       () =>
         new Promise<WorkspaceTask>((resolve) => {
           finishUpdate = resolve;
@@ -311,11 +311,9 @@ describe('WorkspaceTasksPanel', () => {
     expect(newTaskButton).toBeDisabled();
     expect(nextPageButton).toBeDisabled();
 
-    expect(updateStatusMock).toHaveBeenCalledWith(
-      WORKSPACE_ID,
-      CREATED_TASK.id,
-      { status: 'in_progress' }
-    );
+    expect(updateTaskMock).toHaveBeenCalledWith(WORKSPACE_ID, CREATED_TASK.id, {
+      status: 'in_progress',
+    });
 
     if (finishUpdate === undefined) {
       throw new Error('Expected a pending status update');
@@ -339,5 +337,77 @@ describe('WorkspaceTasksPanel', () => {
     });
 
     expect(listTasksMock).toHaveBeenCalledOnce();
+  });
+
+  it('preserves an edit after failure and applies a successful retry', async () => {
+    const user = userEvent.setup();
+
+    listTasksMock.mockReset().mockResolvedValue(SAVED_PAGE);
+
+    updateTaskMock
+      .mockRejectedValueOnce(new Error('Task could not be saved'))
+      .mockResolvedValue({
+        ...CREATED_TASK,
+        title: 'Revised task',
+        description: null,
+      });
+
+    render(
+      <WorkspaceTasksPanel
+        workspaceId={WORKSPACE_ID}
+        requesterId={CREATED_TASK.createdById}
+        requesterRole="member"
+      />,
+      { reactStrictMode: false }
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Ship' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Edit task' });
+    const titleInput = within(dialog).getByRole('textbox', {
+      name: 'Title',
+    });
+    const descriptionInput = within(dialog).getByRole('textbox', {
+      name: 'Description',
+    });
+    const saveButton = within(dialog).getByRole('button', {
+      name: 'Save changes',
+    });
+
+    await user.clear(titleInput);
+    await user.type(titleInput, '  Revised task  ');
+    await user.clear(descriptionInput);
+    await user.click(saveButton);
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Task could not be saved'
+    );
+    expect(dialog).toHaveAttribute('open');
+    expect(titleInput).toHaveValue('  Revised task  ');
+    expect(descriptionInput).toHaveValue('');
+
+    await user.click(saveButton);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Revised task' })
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(dialog).not.toHaveAttribute('open');
+    });
+
+    expect(updateTaskMock).toHaveBeenCalledTimes(2);
+    expect(updateTaskMock).toHaveBeenLastCalledWith(
+      WORKSPACE_ID,
+      CREATED_TASK.id,
+      {
+        title: 'Revised task',
+        description: null,
+      }
+    );
+
+    expect(
+      screen.getByRole('combobox', { name: 'Status for Revised task' })
+    ).toHaveValue('todo');
   });
 });

@@ -4,6 +4,7 @@ export type {
   CreateWorkspaceTaskInput,
   UpdateWorkspaceTaskStatusInput,
   WorkspaceTask,
+  UpdateWorkspaceTaskInput,
 } from '@teamflow/contracts/tasks';
 
 export type WorkspaceTaskPage = Readonly<{
@@ -20,3 +21,8 @@ export type ListWorkspaceTasksParams = Readonly<{
   page?: number;
   pageSize?: number;
 }>;
+
+export type WorkspaceTaskDetailsInput = Pick<
+  WorkspaceTask,
+  'title' | 'description'
+>;
